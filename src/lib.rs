@@ -3,9 +3,10 @@ use std::io::{Error, Write, Read};
 use buf_redux::Buffer;
 use std::thread;
 use std::convert::TryInto;
-use message::Message::{LoginRequest};
 use std::borrow::Borrow;
 use std::ops::Deref;
+use message::Message;
+use crate::message::LoginRequest;
 
 mod message;
 
@@ -54,7 +55,7 @@ impl Slsk {
                     }
                 });
 
-                let loginRequest = LoginRequest(self.username, self.password);
+                let loginRequest = Message::login_request(self.username, self.password);
 
                 match server.write(loginRequest.as_buffer().buf()) {
                     Ok(count) => println!("Writed {} bytes to server", count),
