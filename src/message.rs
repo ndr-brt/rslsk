@@ -48,18 +48,14 @@ pub struct LoginRequest {
 
 impl Message for LoginRequest {
     fn as_buffer(&self) -> Buffer {
-        let cred = format!("{}{}", self.username, self.password);
-        println!("credentials: {}", cred);
-        let computed = md5::compute(format!("{}{}", self.username, self.password));
-        let computed_string = format!("{:x}", computed);
-        println!("hex credentials: {}", computed_string.as_str());
+        let md5 = md5::compute(format!("{}{}", self.username, self.password));
 
         P2PMessage::new()
             .append_u32(1)
             .append_string(self.username)
             .append_string(self.password)
             .append_u32(160)
-            .append_string(computed_string.as_str())
+            .append_string(format!("{:x}", md5).as_str())
             .append_u32(17)
             .to_buffer()
     }

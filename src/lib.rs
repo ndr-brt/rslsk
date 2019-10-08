@@ -1,9 +1,7 @@
 use std::net::{TcpStream};
 use std::io::{Error, Write, Read};
-use buf_redux::Buffer;
 use std::thread;
 use message::Message;
-use crate::message::LoginRequest;
 use std::convert::TryInto;
 
 mod message;
