@@ -1,10 +1,10 @@
 use std::net::{TcpStream};
 use std::io::{Error, Write, Read};
 use std::thread;
-use message::Message;
+use protocol::message::{Message};
 use std::convert::TryInto;
 
-mod message;
+mod protocol;
 
 pub struct Slsk {
     server: &'static str,
