@@ -8,8 +8,6 @@ use std::sync::mpsc::{channel, Sender};
 mod protocol;
 
 pub struct Slsk {
-    server: &'static str,
-    port: u16,
     username: &'static str,
     password: &'static str,
     server_out: Sender<Box<dyn Message>>,
@@ -71,8 +69,6 @@ impl Slsk {
 
                 Result::Ok(
                     Slsk {
-                        server,
-                        port,
                         username,
                         password,
                         server_out,
@@ -91,13 +87,6 @@ impl Slsk {
         self.server_out.send(Message::login_request(self.username, self.password));
         Result::Ok(())
     }
-}
-
-fn as_u32_le(array: &[u8; 4]) -> u32 {
-    ((array[0] as u32) <<  0) |
-        ((array[1] as u32) <<  8) |
-        ((array[2] as u32) << 16) |
-        ((array[3] as u32) << 24)
 }
 
 #[cfg(test)]

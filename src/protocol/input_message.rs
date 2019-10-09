@@ -1,4 +1,3 @@
-use crate::as_u32_le;
 use std::convert::TryInto;
 
 pub(crate) trait InputMessage: Send {
@@ -19,4 +18,11 @@ impl InputMessage for InputMessageImpl {
     fn code(&self) -> u32 {
         as_u32_le(self.buffer[4..8].try_into().unwrap())
     }
+}
+
+fn as_u32_le(array: &[u8; 4]) -> u32 {
+    ((array[0] as u32) <<  0) |
+        ((array[1] as u32) <<  8) |
+        ((array[2] as u32) << 16) |
+        ((array[3] as u32) << 24)
 }
