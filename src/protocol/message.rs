@@ -2,12 +2,12 @@ use buf_redux::Buffer;
 use super::slsk_buffer::SlskBuffer;
 
 
-pub(crate) trait Message {
+pub(crate) trait Message: Send {
     fn as_buffer(&self) -> Buffer;
 }
 impl dyn Message {
-    pub fn login_request(username: &'static str, password: &'static str) -> LoginRequest {
-        LoginRequest { username, password }
+    pub fn login_request(username: &'static str, password: &'static str) -> Box<LoginRequest> {
+        Box::new(LoginRequest { username, password })
     }
 }
 
