@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 
-pub(crate) trait InputMessage: Send {
+pub trait InputMessage: Send {
     fn code(&self) -> u32;
 }
 

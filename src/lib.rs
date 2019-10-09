@@ -2,10 +2,13 @@ use std::net::{TcpStream};
 use std::io::{Error, Write, Read};
 use std::thread;
 use protocol::message::{Message};
-use protocol::input_message::{InputMessage};
+use protocol::input_message::InputMessage;
 use std::sync::mpsc::{channel, Sender};
+use server::Server;
+use crate::server::Listener;
 
 mod protocol;
+mod server;
 
 pub struct Slsk {
     username: &'static str,
@@ -17,19 +20,8 @@ impl Slsk {
     pub fn connect(server: &'static str, port: u16, username: &'static str, password: &'static str) -> Result<Self, Error> {
         let (sender, receiver) = channel::<Box<dyn InputMessage>>();
         let address = format!("{}:{}", server, port);
-        thread::spawn(move || {
-            loop {
-                match receiver.recv() {
-                    Ok(message) => {
-                        match message.code() {
-                            1 => println!("Login response!"),
-                            _ => println!("Unknown message: {}", message.code())
-                        }
-                    },
-                    Err(e) => println!("something wrong")
-                }
-            }
-        });
+        let server = Server::new();
+        thread::spawn(move || server.handle_input_messages(receiver));
 
         println!("{}", address);
         match TcpStream::connect(address) {
