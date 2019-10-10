@@ -1,17 +1,18 @@
 use crate::protocol::input_message::InputMessage;
 use std::sync::mpsc::Receiver;
+use std::net::TcpStream;
 
 pub trait Listener {
     fn handle_input_messages(&self, receiver: Receiver<Box<dyn InputMessage>>);
 }
 
 pub(crate) struct Server {
-
+    stream: TcpStream,
 }
 
 impl Server {
-    pub(crate) fn new() -> Self {
-        Server { }
+    pub(crate) fn new(stream: TcpStream) -> Self {
+        Server { stream }
     }
 }
 
