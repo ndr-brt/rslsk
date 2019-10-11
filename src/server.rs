@@ -3,6 +3,8 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::net::TcpStream;
 use std::io::Read;
 use std::thread;
+use crate::protocol::message::Message;
+use std::io::Write;
 
 pub trait Listener {
     fn handle_input_messages(&self, receiver: Receiver<Box<dyn InputMessage>>);
@@ -10,14 +12,35 @@ pub trait Listener {
 }
 
 pub(crate) struct Server {
+    pub(crate) out: Sender<Box<dyn Message>>,
 }
 
 impl Server {
     pub(crate) fn new(stream: TcpStream) -> Self {
         let (sender, receiver) = channel::<Box<dyn InputMessage>>();
         thread::spawn(move || handle_input_messages(receiver));
-        thread::spawn(move || interpret_messages(stream, sender));
-        Server {}
+        let input_stream = stream.try_clone().unwrap();
+        let mut output_stream = stream.try_clone().unwrap();
+        thread::spawn(move || interpret_messages(input_stream, sender));
+
+        let (server_out, server_out_listener) = channel::<Box<dyn Message>>();
+        thread::spawn(move || {
+            loop {
+                match server_out_listener.recv() {
+                    Ok(message) => {
+                        match output_stream.write(message.as_buffer().buf()) {
+                            Ok(count) => println!("Message sent: Writed {} bytes to server", count),
+                            Err(e) => panic!(e)
+                        }
+                    },
+                    Err(_) => println!("an error!")
+                }
+            }
+        });
+
+        Server {
+            out: server_out,
+        }
     }
 }
 

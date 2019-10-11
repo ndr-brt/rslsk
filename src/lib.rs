@@ -25,27 +25,11 @@ impl Slsk {
             Ok(mut serverStream) => {
                 let server = Server::new(serverStream.try_clone().unwrap());
 
-                let (server_out, server_out_listener) = channel::<Box<dyn Message>>();
-                thread::spawn(move || {
-                    loop {
-                        match server_out_listener.recv() {
-                            Ok(message) => {
-                                match serverStream.write(message.as_buffer().buf()) {
-                                    Ok(count) => println!("Message sent: Writed {} bytes to server", count),
-                                    Err(e) => panic!(e)
-                                }
-                            },
-                            Err(_) => println!("an error!")
-                        }
-                    }
-                });
-
-
                 Result::Ok(
                     Slsk {
                         username,
                         password,
-                        server_out,
+                        server_out: server.out,
                     }
                 )
 
