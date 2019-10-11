@@ -1,11 +1,8 @@
 use std::net::{TcpStream};
-use std::io::{Error, Write, Read};
-use std::thread;
+use std::io::{Error};
 use protocol::message::{Message};
-use protocol::input_message::InputMessage;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{Sender};
 use server::Server;
-use crate::server::Listener;
 
 mod protocol;
 mod server;
@@ -22,8 +19,8 @@ impl Slsk {
 
         println!("{}", address);
         match TcpStream::connect(address) {
-            Ok(mut serverStream) => {
-                let server = Server::new(serverStream.try_clone().unwrap());
+            Ok(socket) => {
+                let server = Server::new(socket);
 
                 Result::Ok(
                     Slsk {
@@ -33,7 +30,7 @@ impl Slsk {
                     }
                 )
 
-            },
+            }
             Err(error) => {
                 println!("{}", error.to_string());
                 Result::Err(error)

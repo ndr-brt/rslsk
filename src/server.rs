@@ -16,30 +16,32 @@ pub(crate) struct Server {
 }
 
 impl Server {
-    pub(crate) fn new(stream: TcpStream) -> Self {
+    pub(crate) fn new(mut socket: TcpStream) -> Self {
+        let mut output_socket = socket.try_clone().unwrap();
+
         let (sender, receiver) = channel::<Box<dyn InputMessage>>();
         thread::spawn(move || handle_input_messages(receiver));
-        let input_stream = stream.try_clone().unwrap();
-        let mut output_stream = stream.try_clone().unwrap();
-        thread::spawn(move || interpret_messages(input_stream, sender));
+        thread::spawn(move || interpret_messages(socket, sender));
 
         let (server_out, server_out_listener) = channel::<Box<dyn Message>>();
-        thread::spawn(move || {
-            loop {
-                match server_out_listener.recv() {
-                    Ok(message) => {
-                        match output_stream.write(message.as_buffer().buf()) {
-                            Ok(count) => println!("Message sent: Writed {} bytes to server", count),
-                            Err(e) => panic!(e)
-                        }
-                    },
-                    Err(_) => println!("an error!")
-                }
-            }
-        });
+        thread::spawn(move || { Server::write_to_server(output_socket, server_out_listener) });
 
         Server {
             out: server_out,
+        }
+    }
+
+    fn write_to_server(mut output_stream: TcpStream, server_out_listener: Receiver<Box<dyn Message>>) {
+        loop {
+            match server_out_listener.recv() {
+                Ok(message) => {
+                    match output_stream.write(message.as_buffer().buf()) {
+                        Ok(count) => println!("Message sent: Writed {} bytes to server", count),
+                        Err(e) => panic!(e)
+                    }
+                },
+                Err(_) => println!("an error!")
+            }
         }
     }
 }
@@ -53,7 +55,7 @@ fn handle_input_messages(receiver: Receiver<Box<dyn InputMessage>>) {
                     _ => println!("Unknown message: {}", message.code())
                 }
             },
-            Err(e) => println!("something wrong")
+            Err(_e) => println!("something wrong")
         }
     }
 }
