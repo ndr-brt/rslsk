@@ -18,32 +18,12 @@ pub struct Slsk {
 
 impl Slsk {
     pub fn connect(server: &'static str, port: u16, username: &'static str, password: &'static str) -> Result<Self, Error> {
-        let (sender, receiver) = channel::<Box<dyn InputMessage>>();
         let address = format!("{}:{}", server, port);
 
         println!("{}", address);
         match TcpStream::connect(address) {
             Ok(mut serverStream) => {
-
                 let server = Server::new(serverStream.try_clone().unwrap());
-                thread::spawn(move || server.handle_input_messages(receiver));
-
-                let mut output_server = serverStream.try_clone().unwrap();
-                thread::spawn(move || {
-                    loop {
-                        let mut buffer: [u8; 1388] = [0; 1388];
-                        match output_server.read(&mut buffer) {
-                            Ok(size) => {
-                                if size > 0 {
-                                    sender.send(InputMessage::from(buffer.to_vec()));
-                                }
-                            }
-                            Err(_) => panic!()
-                        }
-                    }
-                });
-
-
 
                 let (server_out, server_out_listener) = channel::<Box<dyn Message>>();
                 thread::spawn(move || {
