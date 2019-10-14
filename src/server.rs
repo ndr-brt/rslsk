@@ -73,3 +73,78 @@ fn interpret_messages(mut stream: TcpStream, sender: Sender<Box<dyn InputMessage
         }
     }
 }
+
+fn handle_input_message(mut stream: TcpStream, sender: Sender<Box<Vec<u8>>>) {
+    loop {
+        let mut buffer: [u8; 2048] = [0; 2048];
+        match stream.read(&mut buffer) {
+            Ok(size) => {
+                sender.send(Box::new(buffer.to_vec()));
+            }
+            Err(_) => panic!()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::server::{handle_input_message};
+    use std::net::{TcpStream, SocketAddr, SocketAddrV4, Ipv4Addr, TcpListener};
+    use std::sync::mpsc::channel;
+    use crate::protocol::slsk_buffer::SlskBuffer;
+    use std::io::Write;
+    use std::sync::atomic::Ordering;
+    use std::sync::atomic::AtomicUsize;
+    use std::error::Error;
+    use std::thread;
+
+    static PORT: AtomicUsize = AtomicUsize::new(0);
+
+    fn next_test_ip4() -> SocketAddr {
+        let port = PORT.fetch_add(1, Ordering::SeqCst) as u16 + 19000;
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), port))
+    }
+
+    macro_rules! t {
+        ($e:expr) => {
+            match $e {
+                Ok(t) => t,
+                Err(e) => panic!("received error for `{}`: {}", stringify!($e), e),
+            }
+        }
+    }
+
+    #[test]
+    fn handle_small_message() {
+        let address = "127.0.0.1:13123";
+        let listener = t!(TcpListener::bind(address));
+
+        let mut stream = t!(TcpStream::connect(address));
+        let (sender, receiver) = channel::<Box<Vec<u8>>>();
+        let output = t!(stream.try_clone());
+
+        thread::spawn(move || handle_input_message(output, sender));
+
+        let input = SlskBuffer::new()
+            .append_u32(34)
+            .append_string("12345678")
+            .to_buffer();
+
+        let mut server = t!(listener.accept()).0;
+        t!(server.write(SlskBuffer::new()
+        .append_u32(34)
+        .append_string("12345678")
+        .to_buffer().buf()));
+
+
+        loop {
+            match receiver.recv() {
+                Ok(message) => {
+                    assert_eq!(&message[0..input.len()], input.buf());
+                    break;
+                },
+                Err(e) => panic!("Error: {}", e.description())
+            }
+        }
+    }
+}

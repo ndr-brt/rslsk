@@ -29,7 +29,6 @@ impl Slsk {
                         server_out: server.out,
                     }
                 )
-
             }
             Err(error) => {
                 println!("{}", error.to_string());
