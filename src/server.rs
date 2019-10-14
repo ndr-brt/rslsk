@@ -131,20 +131,13 @@ mod tests {
             .to_buffer();
 
         let mut server = t!(listener.accept()).0;
-        t!(server.write(SlskBuffer::new()
-        .append_u32(34)
-        .append_string("12345678")
-        .to_buffer().buf()));
+        t!(server.write(input.buf()));
 
-
-        loop {
-            match receiver.recv() {
-                Ok(message) => {
-                    assert_eq!(&message[0..input.len()], input.buf());
-                    break;
-                },
-                Err(e) => panic!("Error: {}", e.description())
-            }
+        match receiver.recv() {
+            Ok(message) => {
+                assert_eq!(&message[0..input.len()], input.buf());
+            },
+            Err(e) => panic!("Error: {}", e.description())
         }
     }
 }
