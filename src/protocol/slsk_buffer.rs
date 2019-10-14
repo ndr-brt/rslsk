@@ -21,6 +21,12 @@ impl SlskBuffer {
         self
     }
 
+    pub fn raw_buffer(&self) -> Buffer {
+        let mut buffer = Buffer::new();
+        buffer.push_bytes(self.buffer.buf());
+        buffer
+    }
+
     pub fn to_buffer(&self) -> Buffer {
         let mut complete = Buffer::new();
         let buffer_len: u32 = self.buffer.len() as u32;
