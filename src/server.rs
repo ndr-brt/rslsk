@@ -90,7 +90,13 @@ fn handle_input_message(mut stream: TcpStream, sender: Sender<Box<Vec<u8>>>) {
                 println!("MEMORY {:?}", memory.buf());
                 if message_size + 4 <= memory.len() as u32 {
                     println!("È QUI!");
-                    sender.send(Box::new(Vec::from(memory.buf())));
+                    let length = message_size + 4;
+                    let message = &memory.buf()[0..length as usize];
+                    println!("Messaggio da inviare: {:?}", message);
+                    sender.send(Box::new(Vec::from(message)));
+                    memory.consume(length as usize);
+                } else {
+
                 }
 
             }
@@ -171,5 +177,28 @@ mod tests {
         let actual = t!(receiver.recv());
         let expected = [first_part.buf(), second_part.buf()].concat();
         assert_eq!(&actual[0..first_part.len() + second_part.len()], &expected[0..expected.len()]);
+    }
+
+    #[test]
+    fn handle_two_messages_in_one_packet() {
+        let address = "127.0.0.1:13125";
+        let listener = t!(TcpListener::bind(address));
+
+        let (sender, receiver) = channel::<Box<Vec<u8>>>();
+
+        thread::spawn(move || handle_input_message(t!(TcpStream::connect(address)), sender));
+
+        let input = SlskBuffer::new()
+            .append_u32(16)
+            .append_u32(1)
+            .append_string("12345678")
+            .raw_buffer();
+
+        let mut writer = t!(listener.accept()).0;
+        let message = [input.buf(), input.buf()].concat();
+        t!(writer.write(&message));
+
+        let first = t!(receiver.recv());
+        assert_eq!(&first[0..input.len()], input.buf());
     }
 }
