@@ -5,11 +5,14 @@ use rslsk::Slsk;
 fn login() {
     match Slsk::connect("server.slsknet.org", 2242, "ginogino", "ginogino") {
         Ok(slsk) => {
-            let result = slsk.login();
-            loop {
 
+            match slsk.login() {
+                Ok(login_responded) => {
+                    assert_eq!(login_responded.success, true);
+                },
+                Err(_e) => unreachable!()
             }
-            assert!(result.is_ok());
+
         },
         Err(e) => unreachable!()
     }

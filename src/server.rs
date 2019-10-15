@@ -6,6 +6,7 @@ use crate::protocol::message::Message;
 use crate::protocol::packet::InputPackets;
 use std::io::Write;
 use crate::protocol::Looper;
+use std::any::Any;
 
 pub trait Listener {
     fn handle_input_messages(&self, receiver: Receiver<Box<dyn InputMessage>>);
@@ -32,6 +33,10 @@ impl Server {
         Server {
             out: server_out,
         }
+    }
+
+    pub fn send(&self, message: Box<dyn Message>) {
+        self.out.send(message);
     }
 
     fn write_to_server(mut output_stream: TcpStream, server_out_listener: Receiver<Box<dyn Message>>) {
