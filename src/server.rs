@@ -1,12 +1,11 @@
 use crate::protocol::input_message::InputMessage;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::net::TcpStream;
-use std::io::Read;
 use std::thread;
 use crate::protocol::message::Message;
 use crate::protocol::packet::InputPackets;
 use std::io::Write;
-use crate::protocol::packet::Looper;
+use crate::protocol::Looper;
 
 pub trait Listener {
     fn handle_input_messages(&self, receiver: Receiver<Box<dyn InputMessage>>);

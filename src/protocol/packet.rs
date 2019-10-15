@@ -1,17 +1,14 @@
 use std::net::TcpStream;
-use std::sync::mpsc::{Sender, channel};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Sender};
 use buf_redux::Buffer;
 use std::io::Read;
 use std::convert::TryInto;
+use crate::utils::as_u32_le;
+use crate::protocol::Looper;
 
 pub(crate) struct InputPackets {
     stream: TcpStream,
     sender: Sender<Box<Vec<u8>>>,
-}
-
-pub(crate) trait Looper {
-    fn loop_forever(&mut self);
 }
 
 impl InputPackets {
@@ -43,13 +40,6 @@ impl Looper for InputPackets {
     }
 }
 
-fn as_u32_le(array: &[u8; 4]) -> u32 {
-    ((array[0] as u32) <<  0) |
-        ((array[1] as u32) <<  8) |
-        ((array[2] as u32) << 16) |
-        ((array[3] as u32) << 24)
-}
-
 #[cfg(test)]
 mod tests {
     use std::net::{TcpStream, TcpListener};
@@ -57,7 +47,8 @@ mod tests {
     use crate::protocol::slsk_buffer::SlskBuffer;
     use std::io::Write;
     use std::thread;
-    use crate::protocol::packet::{InputPackets, Looper};
+    use crate::protocol::Looper;
+    use crate::protocol::packet::InputPackets;
 
     macro_rules! t {
         ($e:expr) => {
