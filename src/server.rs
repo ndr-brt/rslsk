@@ -20,15 +20,11 @@ impl Server {
     pub(crate) fn new(socket: TcpStream) -> Self {
         let output_socket = socket.try_clone().unwrap();
 
-        let (packets_in, packets_out) = channel::<Box<Vec<u8>>>();
+        let (packets_sink, packets_stream) = channel::<Box<Vec<u8>>>();
 
-        let mut input_packets = InputPackets::new(socket, packets_in);
+        let mut input_packets = InputPackets::new(socket, packets_sink);
         thread::spawn(move || input_packets.loop_forever());
-
-        let (sender, receiver) = channel::<Box<dyn InputMessage>>();
-        thread::spawn(move || interpret_messages(packets_out, sender));
-
-        thread::spawn(move || handle_input_messages(receiver));
+        thread::spawn(move || handle_input_messages(packets_stream));
 
         let (server_out, server_out_listener) = channel::<Box<dyn Message>>();
         thread::spawn(move || { Server::write_to_server(output_socket, server_out_listener) });
@@ -53,27 +49,17 @@ impl Server {
     }
 }
 
-fn handle_input_messages(receiver: Receiver<Box<dyn InputMessage>>) {
+fn handle_input_messages(receiver: Receiver<Box<Vec<u8>>>) {
     loop {
         match receiver.recv() {
-            Ok(message) => {
+            Ok(bytes) => {
+                let message = InputMessage::from(bytes.to_vec());
                 match message.code() {
                     1 => println!("Login response!"),
                     _ => println!("Unknown message: {}", message.code())
                 }
             },
             Err(_e) => println!("something wrong")
-        }
-    }
-}
-
-fn interpret_messages(mut receiver: Receiver<Box<Vec<u8>>>, sender: Sender<Box<dyn InputMessage>>) {
-    loop {
-        match receiver.recv() {
-            Ok(message) => {
-                sender.send(InputMessage::from(message.to_vec()));
-            }
-            Err(_) => panic!()
         }
     }
 }
