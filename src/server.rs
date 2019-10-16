@@ -5,8 +5,8 @@ use std::thread;
 use crate::protocol::message::Message;
 use crate::protocol::packet::InputPackets;
 use std::io::Write;
-use crate::protocol::Looper;
-use std::any::Any;
+use crate::protocol::{Looper, LoginResponded};
+use std::collections::HashMap;
 
 pub trait Listener {
     fn handle_input_messages(&self, receiver: Receiver<Box<dyn InputMessage>>);
@@ -15,6 +15,8 @@ pub trait Listener {
 
 pub(crate) struct Server {
     pub(crate) out: Sender<Box<dyn Message>>,
+    responses: HashMap<&'static str, Sender<Box<&'static str>>>,
+    messages: Receiver<Box<String>>,
 }
 
 impl Server {
@@ -25,18 +27,27 @@ impl Server {
 
         let mut input_packets = InputPackets::new(socket, packets_sink);
         thread::spawn(move || input_packets.loop_forever());
-        thread::spawn(move || handle_input_messages(packets_stream));
+
+        let (messages_sink, messages_stream) = channel::<Box<String>>();
+        thread::spawn(move || Server::handle_input_messages(packets_stream, messages_sink));
 
         let (server_out, server_out_listener) = channel::<Box<dyn Message>>();
         thread::spawn(move || { Server::write_to_server(output_socket, server_out_listener) });
 
         Server {
             out: server_out,
+            responses: HashMap::new(),
+            messages: messages_stream,
         }
     }
 
     pub fn send(&self, message: Box<dyn Message>) {
         self.out.send(message);
+    }
+
+    pub fn login(&mut self, username: &'static str, password: &'static str, response: Sender<Box<&'static str>>) {
+        self.out.send(Message::login_request(username, password));
+        self.responses.insert("login", response);
     }
 
     fn write_to_server(mut output_stream: TcpStream, server_out_listener: Receiver<Box<dyn Message>>) {
@@ -52,19 +63,23 @@ impl Server {
             }
         }
     }
-}
 
-fn handle_input_messages(receiver: Receiver<Box<Vec<u8>>>) {
-    loop {
-        match receiver.recv() {
-            Ok(bytes) => {
-                let message = InputMessage::from(bytes.to_vec());
-                match message.code() {
-                    1 => println!("Login response!"),
-                    _ => println!("Unknown message: {}", message.code())
-                }
-            },
-            Err(_e) => println!("something wrong")
+    fn handle_input_messages(receiver: Receiver<Box<Vec<u8>>>, messages_sink: Sender<Box<String>>) {
+        loop {
+            match receiver.recv() {
+                Ok(bytes) => {
+                    let message = InputMessage::from(bytes.to_vec());
+                    match message.code() {
+                        1 => {
+                            println!("Login response!");
+                            let login_responded = LoginResponded { success: true, message: "TO BE FIXED!" };
+                            messages_sink.send(Box::new(serde_json::to_string(&login_responded).unwrap()));
+                        },
+                        _ => println!("Unknown message: {}", message.code())
+                    }
+                },
+                Err(_e) => println!("something wrong")
+            }
         }
     }
 }

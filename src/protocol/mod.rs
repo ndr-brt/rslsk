@@ -1,3 +1,5 @@
+use serde::{Serialize, Deserialize};
+
 pub(crate) mod message;
 pub(crate) mod input_message;
 pub(crate) mod slsk_buffer;
@@ -7,7 +9,8 @@ pub(crate) trait Looper {
     fn loop_forever(&mut self);
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct LoginResponded {
     pub success: bool,
-    message: &'static str,
+    pub message: &'static str,
 }

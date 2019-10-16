@@ -1,7 +1,6 @@
 use std::net::{TcpStream};
 use std::io::{Error};
-use protocol::message::{Message};
-use std::sync::mpsc::{Sender, channel, RecvError};
+use std::sync::mpsc::{channel, RecvError};
 use server::Server;
 use crate::protocol::LoginResponded;
 
@@ -39,11 +38,13 @@ impl Slsk {
         }
     }
 
-    pub fn login(&self) -> Result<LoginResponded, RecvError> {
-        let (sink, stream) = channel::<LoginResponded>();
-        self.server.send(Message::login_request(self.username, self.password));
-
-        stream.recv()
+    pub fn login(&mut self) -> Result<LoginResponded, RecvError> {
+        let (sink, stream) = channel::<Box<&'static str>>();
+        self.server.login(self.username, self.password, sink);
+        match stream.recv() {
+            Ok(message) => Result::Ok(serde_json::from_str(message.as_ref()).unwrap()),
+            Err(e) => Result::Err(e)
+        }
     }
 }
 
