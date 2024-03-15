@@ -9,5 +9,5 @@ edition = "2021"
 [dependencies]
 futures = "0.3.30"
 buf_redux = "0.8.4"
-md5 = "0.6.1"
+md5 = "0.7.0"
 hex = "0.4.0"
