@@ -1,8 +1,8 @@
 [package]
 name = "rslsk"
 version = "0.1.0"
-authors = ["Andrea Bertagnolli <andrea.bertagnolli@cherrychain.it>"]
-edition = "2018"
+authors = ["Andrea Bertagnolli <ndr_brt@bruttocarattere.org>"]
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

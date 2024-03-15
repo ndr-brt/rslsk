@@ -1,10 +1,12 @@
-use std::net::TcpStream;
-use std::sync::mpsc::{Sender};
-use buf_redux::Buffer;
-use std::io::Read;
 use std::convert::TryInto;
-use crate::utils::as_u32_le;
+use std::io::Read;
+use std::net::TcpStream;
+use std::sync::mpsc::Sender;
+
+use buf_redux::Buffer;
+
 use crate::protocol::Looper;
+use crate::utils::as_u32_le;
 
 pub(crate) struct InputPackets {
     stream: TcpStream,
@@ -30,7 +32,7 @@ impl Looper for InputPackets {
                     if message_size + 4 <= memory.len() as u32 {
                         let length = message_size + 4;
                         let message = &memory.buf()[0..length as usize];
-                        self.sender.send(Box::new(Vec::from(message)));
+                        self.sender.send(Box::new(Vec::from(message))).unwrap();
                         memory.consume(length as usize);
                     }
                 }
@@ -42,13 +44,14 @@ impl Looper for InputPackets {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{TcpStream, TcpListener};
-    use std::sync::mpsc::channel;
-    use crate::protocol::slsk_buffer::SlskBuffer;
     use std::io::Write;
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::mpsc::channel;
     use std::thread;
+
     use crate::protocol::Looper;
     use crate::protocol::packet::InputPackets;
+    use crate::protocol::slsk_buffer::SlskBuffer;
 
     macro_rules! t {
         ($e:expr) => {

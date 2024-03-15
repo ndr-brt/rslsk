@@ -1,7 +1,8 @@
-use std::net::{TcpStream};
-use std::io::{Error};
-use protocol::message::{Message};
-use std::sync::mpsc::{Sender};
+use std::io::Error;
+use std::net::TcpStream;
+use std::sync::mpsc::Sender;
+
+use protocol::message::Message;
 use server::Server;
 
 mod protocol;
@@ -23,7 +24,7 @@ impl Slsk {
             Ok(socket) => {
                 let server = Server::new(socket);
 
-                Result::Ok(
+                Ok(
                     Slsk {
                         username,
                         password,
@@ -33,13 +34,13 @@ impl Slsk {
             }
             Err(error) => {
                 println!("{}", error.to_string());
-                Result::Err(error)
+                Err(error)
             }
         }
     }
 
     pub fn login(&self) -> Result<(), Error> {
-        self.server_out.send(Message::login_request(self.username, self.password));
+        self.server_out.send(<dyn Message>::login_request(self.username, self.password)).unwrap();
         Result::Ok(())
     }
 }

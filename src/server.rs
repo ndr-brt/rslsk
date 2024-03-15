@@ -1,11 +1,12 @@
-use crate::protocol::input_message::InputMessage;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::io::Write;
 use std::net::TcpStream;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
+
+use crate::protocol::input_message::InputMessage;
+use crate::protocol::Looper;
 use crate::protocol::message::Message;
 use crate::protocol::packet::InputPackets;
-use std::io::Write;
-use crate::protocol::Looper;
 
 pub trait Listener {
     fn handle_input_messages(&self, receiver: Receiver<Box<dyn InputMessage>>);
@@ -40,7 +41,7 @@ impl Server {
                 Ok(message) => {
                     match output_stream.write(message.as_buffer().buf()) {
                         Ok(count) => println!("Message sent: Writed {} bytes to server", count),
-                        Err(e) => panic!(e)
+                        Err(e) => std::panic::panic_any(e)
                     }
                 },
                 Err(_) => println!("an error!")
@@ -53,7 +54,7 @@ fn handle_input_messages(receiver: Receiver<Box<Vec<u8>>>) {
     loop {
         match receiver.recv() {
             Ok(bytes) => {
-                let message = InputMessage::from(bytes.to_vec());
+                let message = <dyn InputMessage>::from(bytes.to_vec());
                 match message.code() {
                     1 => println!("Login response!"),
                     _ => println!("Unknown message: {}", message.code())
