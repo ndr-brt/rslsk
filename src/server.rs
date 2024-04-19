@@ -4,7 +4,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
 use crate::message::pack::Pack;
-use crate::message::server_responses::LoginResponse;
+use crate::message::server_responses::{LoginResponse, RoomList};
 use crate::message::unpack::Unpack;
 use crate::protocol::Looper;
 use crate::protocol::packet::InputPackets;
@@ -59,6 +59,10 @@ fn handle_input_messages(receiver: Receiver<Box<Vec<u8>>>) {
                         let response = <LoginResponse>::unpack(&mut vec);
                         println!("Login response. Success? {}. Message: {}", response.success, response.message)
                     },
+                    64 => {
+                        let response = <RoomList>::unpack(&mut vec);
+                        println!("RoomList count: {}.", response.number_of_rooms)
+                    }
                     code => println!("Unknown message code: {}", code)
                 }
             },

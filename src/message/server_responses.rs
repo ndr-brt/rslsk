@@ -8,6 +8,10 @@ pub struct LoginResponse {
     is_supporter: Option<bool>
 }
 
+pub struct RoomList {
+    pub number_of_rooms: u32
+}
+
 impl Unpack for LoginResponse {
     fn unpack(bytes: &mut Vec<u8>) -> Self {
         let success = <bool>::unpack(bytes);
@@ -30,7 +34,15 @@ impl Unpack for LoginResponse {
                 is_supporter: None,
             }
         }
+    }
+}
 
+impl Unpack for RoomList {
+    fn unpack(bytes: &mut Vec<u8>) -> Self {
+        let number_of_rooms = <u32>::unpack(bytes);
 
+        RoomList {
+            number_of_rooms
+        }
     }
 }
