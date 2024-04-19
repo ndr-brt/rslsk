@@ -1,4 +1,4 @@
-use buf_redux::Buffer;
+use buffer_redux::Buffer;
 
 pub struct SlskBuffer {
     buffer: Buffer
@@ -19,12 +19,6 @@ impl SlskBuffer {
         self.buffer.push_bytes(&length.to_le_bytes());
         self.buffer.push_bytes(value.as_bytes());
         self
-    }
-
-    pub fn raw_buffer(&self) -> Buffer {
-        let mut buffer = Buffer::new();
-        buffer.push_bytes(self.buffer.buf());
-        buffer
     }
 
     pub fn to_buffer(&self) -> Buffer {

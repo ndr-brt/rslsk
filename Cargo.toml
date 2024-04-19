@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+buffer-redux = "1.0.1"
 futures = "0.3.30"
-buf_redux = "0.8.4"
 md5 = "0.7.0"
 hex = "0.4.0"

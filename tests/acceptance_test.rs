@@ -1,3 +1,5 @@
+use std::thread;
+use std::time::Duration;
 use rslsk::Slsk;
 
 #[test]
@@ -6,7 +8,14 @@ fn login() {
         Ok(slsk) => {
             let result = slsk.login();
 
+            let duration = Duration::from_secs(8);
+            thread::sleep(duration);
+
             assert!(result.is_ok());
+
+            // wait for login response, verify success is true
+
+
         },
         Err(_e) => unreachable!()
     }

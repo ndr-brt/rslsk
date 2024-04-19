@@ -1,4 +1,4 @@
-use buf_redux::Buffer;
+use buffer_redux::Buffer;
 use super::slsk_buffer::SlskBuffer;
 
 

@@ -3,7 +3,7 @@ use std::io::Read;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 
-use buf_redux::Buffer;
+use buffer_redux::Buffer;
 
 use crate::protocol::Looper;
 use crate::utils::as_u32_le;
@@ -28,7 +28,7 @@ impl Looper for InputPackets {
                 Ok(bytes_read) => {
                     memory.push_bytes(&buffer[0..bytes_read]);
 
-                    let message_size = as_u32_le(&memory.buf()[0..4].try_into().unwrap());
+                    let message_size = as_u32_le(memory.buf()[0..4].try_into().unwrap());
                     if message_size + 4 <= memory.len() as u32 {
                         let length = message_size + 4;
                         let message = &memory.buf()[0..length as usize];

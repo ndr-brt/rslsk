@@ -8,6 +8,7 @@ use server::Server;
 mod protocol;
 mod server;
 mod utils;
+mod message;
 
 pub struct Slsk {
     username: &'static str,
