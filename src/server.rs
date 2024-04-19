@@ -3,14 +3,14 @@ use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 
-use crate::message::server::LoginResponse;
+use crate::message::pack::Pack;
+use crate::message::server_responses::LoginResponse;
+use crate::message::unpack::Unpack;
 use crate::protocol::Looper;
-use crate::protocol::message::Message;
 use crate::protocol::packet::InputPackets;
-use crate::protocol::unpack::Unpack;
 
 pub(crate) struct Server {
-    pub(crate) out: Sender<Box<dyn Message>>,
+    pub(crate) out: Sender<Box<Vec<u8>>>,
 }
 
 impl Server {
@@ -23,7 +23,7 @@ impl Server {
         thread::spawn(move || input_packets.loop_forever());
         thread::spawn(move || handle_input_messages(packets_stream));
 
-        let (server_out, server_out_listener) = channel::<Box<dyn Message>>();
+        let (server_out, server_out_listener) = channel::<Box<Vec<u8>>>();
         thread::spawn(move || { Server::write_to_server(output_socket, server_out_listener) });
 
         Server {
@@ -31,11 +31,11 @@ impl Server {
         }
     }
 
-    fn write_to_server(mut output_stream: TcpStream, server_out_listener: Receiver<Box<dyn Message>>) {
+    fn write_to_server(mut output_stream: TcpStream, server_out_listener: Receiver<Box<Vec<u8>>>) {
         loop {
             match server_out_listener.recv() {
                 Ok(message) => {
-                    match output_stream.write(message.as_buffer().buf()) {
+                    match output_stream.write(message.as_ref().pack().as_slice()) {
                         Ok(count) => println!("Message sent: Wrote {} bytes to server", count),
                         Err(e) => std::panic::panic_any(e)
                     }

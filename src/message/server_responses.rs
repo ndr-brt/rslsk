@@ -1,4 +1,4 @@
-use crate::protocol::unpack::Unpack;
+use crate::message::unpack::Unpack;
 
 pub struct LoginResponse {
     pub success: bool,

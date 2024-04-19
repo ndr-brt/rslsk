@@ -2,8 +2,10 @@ use std::io::Error;
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 
-use protocol::message::Message;
 use server::Server;
+
+use crate::message::pack::Pack;
+use crate::message::server_requests::LoginRequest;
 
 mod protocol;
 mod server;
@@ -11,13 +13,13 @@ mod utils;
 mod message;
 
 pub struct Slsk {
-    username: &'static str,
-    password: &'static str,
-    server_out: Sender<Box<dyn Message>>,
+    username: String,
+    password: String,
+    server_out: Sender<Box<Vec<u8>>>,
 }
 
 impl Slsk {
-    pub fn connect(server: &'static str, port: u16, username: &'static str, password: &'static str) -> Result<Self, Error> {
+    pub fn connect(server: &'static str, port: u16, username: String, password: String) -> Result<Self, Error> {
         let address = format!("{}:{}", server, port);
 
         println!("{}", address);
@@ -41,8 +43,11 @@ impl Slsk {
     }
 
     pub fn login(&self) -> Result<(), Error> {
-        self.server_out.send(<dyn Message>::login_request(self.username, self.password)).unwrap();
-        Result::Ok(())
+        let username = self.username.clone();
+        let password = self.password.clone();
+        let request = LoginRequest { username, password };
+        self.server_out.send(Box::new(request.pack())).unwrap();
+        Ok(())
     }
 }
 

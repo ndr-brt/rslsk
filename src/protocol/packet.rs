@@ -49,88 +49,76 @@ mod tests {
     use std::sync::mpsc::channel;
     use std::thread;
 
+    use crate::message::pack::Pack;
     use crate::protocol::Looper;
     use crate::protocol::packet::InputPackets;
-    use crate::protocol::slsk_buffer::SlskBuffer;
-
-    macro_rules! t {
-        ($e:expr) => {
-            match $e {
-                Ok(t) => t,
-                Err(e) => panic!("received error for `{}`: {}", stringify!($e), e),
-            }
-        }
-    }
 
     #[test]
     fn handle_small_message() {
-        let address = "127.0.0.1:13123";
-        let listener = t!(TcpListener::bind(address));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
 
         let (sender, receiver) = channel::<Box<Vec<u8>>>();
-        let mut input_message_handler = InputPackets::new(t!(TcpStream::connect(address)), sender);
+        let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let mut input_message_handler = InputPackets::new(stream, sender);
         thread::spawn(move || input_message_handler.loop_forever());
 
-        let input = SlskBuffer::new()
-            .append_u32(16)
-            .append_u32(1)
-            .append_string("12345678")
-            .raw_buffer();
+        let mut input = vec![];
+        input.extend(16u32.pack());
+        input.extend(1u32.pack());
+        input.extend(String::from("12345678").pack());
+        let packed = input.pack();
 
-        let mut writer = t!(listener.accept()).0;
-        t!(writer.write(input.buf()));
+        let mut writer = listener.accept().unwrap().0;
+        writer.write(packed.as_slice()).unwrap();
 
-        let actual = t!(receiver.recv());
-        assert_eq!(&actual[0..input.len()], input.buf());
+        let actual = receiver.recv().unwrap();
+        assert_eq!(&actual[0..packed.len()], packed);
     }
 
     #[test]
     fn handle_message_split_in_two_parts() {
-        let address = "127.0.0.1:13124";
-        let listener = t!(TcpListener::bind(address));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
 
         let (sender, receiver) = channel::<Box<Vec<u8>>>();
-        let mut input_message_handler = InputPackets::new(t!(TcpStream::connect(address)), sender);
+        let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let mut input_message_handler = InputPackets::new(stream, sender);
         thread::spawn(move || input_message_handler.loop_forever());
 
-        let first_part = SlskBuffer::new()
-            .append_u32(16)
-            .append_u32(1)
-            .raw_buffer();
+        let mut first_part = vec![];
+        first_part.extend(16u32.pack());
+        first_part.extend(1u32.pack());
 
-        let second_part = SlskBuffer::new()
-            .append_string("12345678")
-            .raw_buffer();
+        let mut second_part = vec![];
+        second_part.extend(String::from("12345678").pack());
 
-        let mut writer = t!(listener.accept()).0;
-        t!(writer.write(first_part.buf()));
-        t!(writer.write(second_part.buf()));
+        let mut writer = listener.accept().unwrap().0;
+        writer.write(first_part.as_slice()).unwrap();
+        writer.write(second_part.as_slice()).unwrap();
 
-        let actual = t!(receiver.recv());
-        let expected = [first_part.buf(), second_part.buf()].concat();
+        let actual = receiver.recv().unwrap();
+        let expected = [first_part.as_slice(), second_part.as_slice()].concat();
         assert_eq!(&actual[0..first_part.len() + second_part.len()], &expected[0..expected.len()]);
     }
 
     #[test]
     fn handle_two_messages_in_one_packet() {
-        let address = "127.0.0.1:13125";
-        let listener = t!(TcpListener::bind(address));
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
 
         let (sender, receiver) = channel::<Box<Vec<u8>>>();
-        let mut input_message_handler = InputPackets::new(t!(TcpStream::connect(address)), sender);
+        let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let mut input_message_handler = InputPackets::new(stream, sender);
         thread::spawn(move || input_message_handler.loop_forever());
 
-        let input = SlskBuffer::new()
-            .append_u32(16)
-            .append_u32(1)
-            .append_string("12345678")
-            .raw_buffer();
+        let mut input = vec![];
+        input.extend(16u32.pack());
+        input.extend(1u32.pack());
+        input.extend(String::from("12345678").pack());
 
-        let mut writer = t!(listener.accept()).0;
-        let message = [input.buf(), input.buf()].concat();
-        t!(writer.write(&message));
+        let mut writer = listener.accept().unwrap().0;
+        let message = [input.as_slice(), input.as_slice()].concat();
+        writer.write(&message).unwrap();
 
-        let first = t!(receiver.recv());
-        assert_eq!(&first[0..input.len()], input.buf());
+        let first = receiver.recv().unwrap();
+        assert_eq!(&first[0..input.len()], input.as_slice());
     }
 }

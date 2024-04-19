@@ -4,7 +4,7 @@ use rslsk::Slsk;
 
 #[test]
 fn login() {
-    match Slsk::connect("server.slsknet.org", 2242, "ginogino", "ginogino") {
+    match Slsk::connect("server.slsknet.org", 2242, String::from("ginogino"), String::from("ginogino")) {
         Ok(slsk) => {
             let result = slsk.login();
 
