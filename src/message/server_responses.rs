@@ -8,9 +8,9 @@ pub enum ServerResponses {
 pub struct LoginResponse {
     pub success: bool,
     pub message: String,
-    ip: Option<u32>,
-    hash: Option<String>,
-    is_supporter: Option<bool>
+    pub(crate) ip: Option<u32>,
+    pub(crate) hash: Option<String>,
+    pub(crate) is_supporter: Option<bool>
 }
 
 pub struct RoomList {
