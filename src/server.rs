@@ -1,72 +1,96 @@
-use std::io::Write;
-use std::net::TcpStream;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::thread;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::sync::broadcast;
+use tokio::sync::mpsc::{channel, Sender};
 
+use crate::commands::Command;
+use crate::events::Event::LoginSucceeded;
 use crate::message::pack::Pack;
-use crate::message::server_responses::{LoginResponse, RoomList};
+use crate::message::server_requests::{LoginRequest, ServerRequests};
+use crate::message::server_responses::{LoginResponse, RoomList, ServerResponses};
 use crate::message::unpack::Unpack;
-use crate::protocol::Looper;
-use crate::protocol::packet::InputPackets;
 
 pub(crate) struct Server {
-    pub(crate) out: Sender<Box<Vec<u8>>>,
+    pub(crate) command_sender: Sender<Command>
 }
 
 impl Server {
-    pub(crate) fn new(socket: TcpStream) -> Self {
-        let output_socket = socket.try_clone().unwrap();
+    pub(crate) async fn new(socket: TcpStream) -> Self {
+        let (read_socket, mut write_socket) = socket.into_split();
 
-        let (packets_sink, packets_stream) = channel::<Box<Vec<u8>>>();
+        let (command_sender, mut command_receiver) = channel(8);
+        let (message_sender, mut message_receiver) = channel::<ServerRequests>(8);
+        let (msg_tx, msg_rx) = broadcast::channel::<ServerResponses>(8);
 
-        let mut input_packets = InputPackets::new(socket, packets_sink);
-        thread::spawn(move || input_packets.loop_forever());
-        thread::spawn(move || handle_input_messages(packets_stream));
+        tokio::spawn(handle_server_input(read_socket, msg_tx));
 
-        let (server_out, server_out_listener) = channel::<Box<Vec<u8>>>();
-        thread::spawn(move || { Server::write_to_server(output_socket, server_out_listener) });
-
-        Server {
-            out: server_out,
-        }
-    }
-
-    fn write_to_server(mut output_stream: TcpStream, server_out_listener: Receiver<Box<Vec<u8>>>) {
-        loop {
-            match server_out_listener.recv() {
-                Ok(message) => {
-                    match output_stream.write(message.as_ref().pack().as_slice()) {
-                        Ok(count) => println!("Message sent: Wrote {} bytes to server", count),
-                        Err(e) => std::panic::panic_any(e)
-                    }
-                },
-                Err(_) => println!("an error!")
+        tokio::spawn(async move {
+            while let Some(message) = message_receiver.recv().await {
+                let message_vec = message.pack();
+                match write_socket.write(message_vec.pack().as_slice()).await {
+                    Ok(count) => println!("Message sent: Wrote {} bytes to server", count),
+                    Err(e) => std::panic::panic_any(e)
+                }
             }
-        }
+        });
+
+        tokio::spawn(async move {
+            while let Some(command) = command_receiver.recv().await {
+                match command {
+                    Command::Login { username, password, tx } => {
+                        println!("Execute command: login");
+                        let mut tx_login_response = msg_rx.resubscribe();
+
+                        let login_request = ServerRequests::LoginRequest(LoginRequest { username, password });
+                        message_sender.send(login_request).await.unwrap();
+
+                        match tx_login_response.recv().await {
+                            Ok(response) => {
+                                match response {
+                                    ServerResponses::LoginResponse(login_response) => {
+                                        tx.send(LoginSucceeded { message: login_response.message }).unwrap()
+                                    }
+                                }
+                            },
+                            Err(err) => {
+                                println!("{}", err)
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        Server { command_sender }
     }
+
 }
 
-fn handle_input_messages(receiver: Receiver<Box<Vec<u8>>>) {
+async fn handle_server_input(mut read_socket: tokio::net::tcp::OwnedReadHalf, msg_tx: broadcast::Sender<ServerResponses>) {
     loop {
-        match receiver.recv() {
-            Ok(bytes) => {
-                let mut vec = bytes.to_vec();
-                let message_length = <u32>::unpack(&mut vec);
-                let message_type = <u32>::unpack(&mut vec);
-                println!("Received message type {}, lenght {}", message_type, message_length);
-                match message_type {
-                    1 => {
-                        let response = <LoginResponse>::unpack(&mut vec);
-                        println!("Login response. Success? {}. Message: {}", response.success, response.message)
-                    },
-                    64 => {
-                        let response = <RoomList>::unpack(&mut vec);
-                        println!("RoomList count: {}.", response.number_of_rooms)
-                    }
-                    code => println!("Unknown message code: {}", code)
-                }
+        let mut length: [u8; 4] = [0, 0, 0, 0];
+        match read_socket.read_exact(&mut length).await {
+            Ok(_len) => (),
+            Err(_err) => return,
+        }
+
+        let length = u32::from_le_bytes(length);
+        let mut bytes: Vec<u8> = vec![0; length as usize];
+        let _ = read_socket.read_exact(&mut bytes).await;
+        let code = <u32>::unpack(&mut bytes);
+
+        println!("Received message type {}, length {}", code, length);
+        match code {
+            1 => {
+                let response = <LoginResponse>::unpack(&mut bytes);
+                println!("Login response. Success? {}. Message: {}", response.success, response.message);
+                msg_tx.send(ServerResponses::LoginResponse(response)).unwrap();
             },
-            Err(_e) => println!("something wrong")
+            64 => {
+                let response = <RoomList>::unpack(&mut bytes);
+                println!("RoomList count: {}.", response.number_of_rooms)
+            }
+            code => println!("Unknown message code: {}", code)
         }
     }
 }

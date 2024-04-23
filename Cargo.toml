@@ -9,5 +9,10 @@ edition = "2021"
 [dependencies]
 buffer-redux = "1.0.1"
 futures = "0.3.30"
-md5 = "0.7.0"
 hex = "0.4.0"
+md5 = "0.7.0"
+tokio = { version = "1", features = ["full"] }
+log = "0.4.21"
+
+[dev-dependencies]
+awaitility = "0.3.1"

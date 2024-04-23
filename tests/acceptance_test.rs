@@ -1,23 +1,11 @@
-use std::thread;
-use std::time::Duration;
 use rslsk::Slsk;
 
-#[test]
-fn login() {
-    match Slsk::connect("server.slsknet.org", 2242, String::from("ginogino"), String::from("ginogino")) {
-        Ok(slsk) => {
-            let result = slsk.login();
+#[tokio::test]
+async fn login() {
+    let slsk = Slsk::connect("server.slsknet.org", 2242, String::from("ginogino"), String::from("ginogino"))
+        .await.unwrap();
 
-            let duration = Duration::from_secs(8);
-            thread::sleep(duration);
+    let result = slsk.login().await;
 
-            assert!(result.is_ok());
-
-            // wait for login response, verify success is true
-
-
-        },
-        Err(_e) => unreachable!()
-    }
-
+    assert!(result.is_ok());
 }

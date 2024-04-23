@@ -1,5 +1,10 @@
 use crate::message::unpack::Unpack;
+#[derive(Clone, Debug)]
+pub enum ServerResponses {
+    LoginResponse(LoginResponse)
+}
 
+#[derive(Clone, Debug)]
 pub struct LoginResponse {
     pub success: bool,
     pub message: String,
