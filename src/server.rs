@@ -3,10 +3,10 @@ use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::{channel, Sender};
 
+use crate::command_handlers::LoginHandler;
 use crate::commands::Command;
-use crate::events::Event::LoginSucceeded;
 use crate::message::pack::Pack;
-use crate::message::server_requests::{LoginRequest, ServerRequests};
+use crate::message::server_requests::ServerRequests;
 use crate::message::server_responses::{LoginResponse, RoomList, ServerResponses};
 use crate::message::unpack::Unpack;
 
@@ -38,24 +38,9 @@ impl Server {
             while let Some(command) = command_receiver.recv().await {
                 match command {
                     Command::Login { username, password, tx } => {
-                        println!("Execute command: login");
-                        let mut tx_login_response = msg_rx.resubscribe();
-
-                        let login_request = ServerRequests::LoginRequest(LoginRequest { username, password });
-                        message_sender.send(login_request).await.unwrap();
-
-                        match tx_login_response.recv().await {
-                            Ok(response) => {
-                                match response {
-                                    ServerResponses::LoginResponse(login_response) => {
-                                        tx.send(LoginSucceeded { message: login_response.message }).unwrap()
-                                    }
-                                }
-                            },
-                            Err(err) => {
-                                println!("{}", err)
-                            }
-                        }
+                        LoginHandler::new(message_sender.clone(), msg_rx.resubscribe())
+                            .handle(username, password, tx)
+                            .await;
                     }
                 }
             }

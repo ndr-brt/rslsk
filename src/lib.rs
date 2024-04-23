@@ -14,6 +14,7 @@ mod server;
 mod message;
 pub mod events;
 mod commands;
+mod command_handlers;
 
 pub struct Slsk {
     username: String,
