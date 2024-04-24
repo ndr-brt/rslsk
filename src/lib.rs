@@ -61,7 +61,8 @@ impl Slsk {
         match response {
             Ok(event) => {
                 match event {
-                    Event::LoginSucceeded { message } => Ok(message)
+                    Event::LoginSucceeded { message } => Ok(message),
+                    _ => Err(Error::new(ErrorKind::Other, "event not expected"))
                 }
             },
             Err(_err) => Err(Error::new(ErrorKind::Other, "cannot login"))

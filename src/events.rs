@@ -1,4 +1,5 @@
 #[derive(Debug, PartialEq)]
 pub enum Event {
-    LoginSucceeded { message: String }
+    LoginSucceeded { message: String },
+    LoginFailed { message: String }
 }

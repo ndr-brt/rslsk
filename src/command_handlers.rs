@@ -1,7 +1,7 @@
 use tokio::sync::{broadcast, mpsc};
 use tokio::sync::oneshot::Sender;
 
-use crate::events::Event::LoginSucceeded;
+use crate::events::Event::{LoginFailed, LoginSucceeded};
 use crate::message::server_requests::{LoginRequest, ServerRequests};
 use crate::message::server_responses::ServerResponses;
 
@@ -26,7 +26,11 @@ impl LoginHandler {
             Ok(response) => {
                 match response {
                     ServerResponses::LoginResponse(login_response) => {
-                        tx.send(LoginSucceeded { message: login_response.message }).unwrap()
+                        if login_response.success {
+                            tx.send(LoginSucceeded { message: login_response.message }).unwrap()
+                        } else {
+                            tx.send(LoginFailed { message: login_response.message }).unwrap()
+                        }
                     }
                 }
             },
@@ -43,7 +47,7 @@ mod tests {
 
     use crate::command_handlers::LoginHandler;
     use crate::events::Event;
-    use crate::message::server_requests::ServerRequests;
+    use crate::message::server_requests::{LoginRequest, ServerRequests};
     use crate::message::server_responses::{LoginResponse, ServerResponses};
 
     #[tokio::test]
@@ -52,22 +56,8 @@ mod tests {
         let (server_responses_tx, server_responses) = broadcast::channel(1);
         let (tx, rx) = oneshot::channel();
 
-        tokio::spawn(async move {
-            let request = server_requests_rx.recv().await.unwrap();
-            match request {
-                ServerRequests::LoginRequest(request) => {
-                    let response = LoginResponse {
-                        success: true,
-                        message: String::from("ok"),
-                        ip: Some(12u32),
-                        hash: None,
-                        is_supporter: None
-                    };
-
-                    server_responses_tx.send(ServerResponses::LoginResponse(response))
-                }
-            }
-        });
+        let response = login_response(true, "ok");
+        server_responses_tx.send(ServerResponses::LoginResponse(response)).unwrap();
 
         LoginHandler::new(server_requests, server_responses)
             .handle(String::from("user"), String::from("pwd"), tx)
@@ -75,7 +65,39 @@ mod tests {
 
         let result = rx.await.unwrap();
 
-        assert_eq!(result, Event::LoginSucceeded { message: String::from("ok") })
+        assert_eq!(result, Event::LoginSucceeded { message: String::from("ok") });
+        let request = server_requests_rx.recv().await.unwrap();
+        assert_eq!(request, ServerRequests::LoginRequest(LoginRequest { username: String::from("user"), password: String::from("pwd") }));
+    }
+
+    #[tokio::test]
+    async fn should_return_failure_when_login_failed() {
+        let (server_requests, mut server_requests_rx) = mpsc::channel(1);
+        let (server_responses_tx, server_responses) = broadcast::channel(1);
+        let (tx, rx) = oneshot::channel();
+
+        let response = login_response(false, "error");
+        server_responses_tx.send(ServerResponses::LoginResponse(response)).unwrap();
+
+        LoginHandler::new(server_requests, server_responses)
+            .handle(String::from("user"), String::from("pwd"), tx)
+            .await;
+
+        let result = rx.await.unwrap();
+
+        assert_eq!(result, Event::LoginFailed { message: String::from("error") });
+        let request = server_requests_rx.recv().await.unwrap();
+        assert_eq!(request, ServerRequests::LoginRequest(LoginRequest { username: String::from("user"), password: String::from("pwd") }));
+    }
+
+    fn login_response(success: bool, message: &str) -> LoginResponse {
+        return LoginResponse {
+            success,
+            message: String::from(message),
+            ip: None,
+            hash: None,
+            is_supporter: None
+        };
     }
 
 }

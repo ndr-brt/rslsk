@@ -1,5 +1,6 @@
 use crate::message::pack::Pack;
 
+#[derive(Debug, PartialEq)]
 pub enum ServerRequests {
     LoginRequest(LoginRequest)
 }
@@ -13,6 +14,7 @@ impl Pack for ServerRequests {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct LoginRequest {
     pub(crate) username: String,
     pub(crate) password: String,
