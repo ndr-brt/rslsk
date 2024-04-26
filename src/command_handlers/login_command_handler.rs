@@ -45,9 +45,9 @@ impl LoginHandler {
 mod tests {
     use tokio::sync::{broadcast, mpsc, oneshot};
 
-    use crate::command_handlers::LoginHandler;
+    use crate::command_handlers::login_command_handler::LoginHandler;
     use crate::events::Event;
-    use crate::message::server_requests::{LoginRequest, ServerRequests};
+    use crate::message::server_requests::ServerRequests;
     use crate::message::server_responses::{LoginResponse, ServerResponses};
 
     #[tokio::test]
@@ -63,11 +63,17 @@ mod tests {
             .handle(String::from("user"), String::from("pwd"), tx)
             .await;
 
-        let result = rx.await.unwrap();
-
-        assert_eq!(result, Event::LoginSucceeded { message: String::from("ok") });
-        let request = server_requests_rx.recv().await.unwrap();
-        assert_eq!(request, ServerRequests::LoginRequest(LoginRequest { username: String::from("user"), password: String::from("pwd") }));
+        match rx.await.unwrap() {
+            Event::LoginSucceeded { message } => assert_eq!(message, "ok"),
+            _ => panic!("should be login succeeded")
+        }
+        match server_requests_rx.recv().await.unwrap() {
+            ServerRequests::LoginRequest(request) => {
+                assert_eq!(request.username, String::from("user"));
+                assert_eq!(request.password, String::from("pwd"));
+            },
+            _ => panic!("should be a login request")
+        }
     }
 
     #[tokio::test]
@@ -83,11 +89,10 @@ mod tests {
             .handle(String::from("user"), String::from("pwd"), tx)
             .await;
 
-        let result = rx.await.unwrap();
-
-        assert_eq!(result, Event::LoginFailed { message: String::from("error") });
-        let request = server_requests_rx.recv().await.unwrap();
-        assert_eq!(request, ServerRequests::LoginRequest(LoginRequest { username: String::from("user"), password: String::from("pwd") }));
+        match rx.await.unwrap() {
+            Event::LoginFailed { message } => assert_eq!(message, "error"),
+            _ => panic!("should be login failed")
+        }
     }
 
     fn login_response(success: bool, message: &str) -> LoginResponse {

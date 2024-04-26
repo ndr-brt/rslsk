@@ -1,5 +1,14 @@
+use std::net::Ipv4Addr;
+
 pub trait Unpack: Sized {
     fn unpack(bytes: &mut Vec<u8>) -> Self;
+}
+
+pub struct IpAddr {
+    one: u8,
+    two: u8,
+    three: u8,
+    four: u8
 }
 
 impl Unpack for u32 {
@@ -15,6 +24,12 @@ impl Unpack for bool {
     fn unpack(bytes: &mut Vec<u8>) -> Self {
         let drain: Vec<u8> = bytes.drain(..1).collect();
         return drain[0] == 1;
+    }
+}
+
+impl Unpack for Ipv4Addr {
+    fn unpack(bytes: &mut Vec<u8>) -> Self {
+        Ipv4Addr::from(<u32>::unpack(bytes))
     }
 }
 

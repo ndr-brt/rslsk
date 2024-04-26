@@ -2,19 +2,20 @@ use std::io::{Error, ErrorKind};
 
 use tokio::io::Result;
 use tokio::net::TcpStream;
+use tokio::sync::{mpsc, oneshot};
 use tokio::sync::mpsc::Sender;
 
 use server::Server;
 
 use crate::commands::Command;
 use crate::commands::Command::Login;
-use crate::events::Event;
+use crate::events::{Event, SearchResultItem};
 
 mod server;
 mod message;
 pub mod events;
 mod commands;
-mod command_handlers;
+pub mod command_handlers;
 
 pub struct Slsk {
     username: String,
@@ -51,7 +52,7 @@ impl Slsk {
         let username = self.username.clone();
         let password = self.password.clone();
 
-        let (tx, rx) = tokio::sync::oneshot::channel::<Event>();
+        let (tx, rx) = oneshot::channel::<Event>();
 
         let command = Login { username, password, tx };
         self.command_bus.send(command).await.unwrap();
@@ -66,6 +67,25 @@ impl Slsk {
                 }
             },
             Err(_err) => Err(Error::new(ErrorKind::Other, "cannot login"))
+        }
+    }
+
+    pub async fn search(&self, query: String) -> Result<mpsc::Receiver<SearchResultItem>> {
+        let (tx, rx) = oneshot::channel::<Event>();
+
+        let command = Command::Search { query, tx };
+        self.command_bus.send(command).await.unwrap();
+
+        let response = rx.await;
+
+        match response {
+            Ok(event) => {
+                match event {
+                    Event::SearchResultReceived { recv } => Ok(recv),
+                    _ => Err(Error::new(ErrorKind::Other, "event not expected"))
+                }
+            },
+            Err(_err) => Err(Error::new(ErrorKind::Other, "cannot search"))
         }
     }
 
