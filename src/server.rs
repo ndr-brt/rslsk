@@ -10,7 +10,7 @@ use crate::command_handlers::login_command_handler::LoginHandler;
 use crate::commands::Command;
 use crate::events::{Event, SearchResultItem};
 use crate::message::pack::Pack;
-use crate::message::peer::PeerInit;
+use crate::message::peer::{FileSearchResponse, PeerInit};
 use crate::message::server_requests::{FileSearch, ServerRequests};
 use crate::message::server_responses::{ConnectToPeer, ExcludedSearchPhrases, LoginResponse, ParentMinSpeed, ParentSpeedRatio, PrivilegedUsers, RoomList, ServerResponses, WishlistInterval};
 use crate::message::unpack::Unpack;
@@ -68,6 +68,10 @@ impl Server {
                                 let _ = listener_stream.read_exact(&mut bytes).await;
 
                                 match <u32>::unpack(&mut bytes) {
+                                    9 => {
+                                        let message = <FileSearchResponse>::unpack(&mut bytes);
+                                        println!("Received from peer: FileSearchResponse. username {}, token {}, count {}", message.username, message.token, message.count);
+                                    }
                                     code => println!("Received from peer: Unknown message code: {}, length: {}", code, length)
                                 }
                             });
