@@ -2,7 +2,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio::sync::oneshot::Sender;
 
 use crate::events::Event::{LoginFailed, LoginSucceeded};
-use crate::message::server_requests::{LoginRequest, ServerRequests};
+use crate::message::server_requests::{LoginRequest, ServerRequests, SetWaitPort};
 use crate::message::server_responses::ServerResponses;
 
 pub struct LoginHandler {
@@ -27,6 +27,8 @@ impl LoginHandler {
                 match response {
                     ServerResponses::LoginResponse(login_response) => {
                         if login_response.success {
+                            let set_wait_port = ServerRequests::SetWaitPort(SetWaitPort { port: 2234 });
+                            self.server_requests.send(set_wait_port).await.unwrap();
                             tx.send(LoginSucceeded { message: login_response.message }).unwrap()
                         } else {
                             tx.send(LoginFailed { message: login_response.message }).unwrap()

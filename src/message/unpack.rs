@@ -4,11 +4,10 @@ pub trait Unpack: Sized {
     fn unpack(bytes: &mut Vec<u8>) -> Self;
 }
 
-pub struct IpAddr {
-    one: u8,
-    two: u8,
-    three: u8,
-    four: u8
+impl Unpack for u8 {
+    fn unpack(bytes: &mut Vec<u8>) -> Self {
+        bytes.drain(..1).next().unwrap()
+    }
 }
 
 impl Unpack for u32 {

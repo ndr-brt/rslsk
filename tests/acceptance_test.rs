@@ -22,8 +22,8 @@ async fn search() {
     let result = slsk.search(String::from("leatherface")).await;
 
     assert!(result.is_ok());
-    tokio::time::sleep(Duration::from_secs(5)).await;
-    //
+    tokio::time::sleep(Duration::from_secs(10)).await;
+
     // let item = result.unwrap().recv().await.unwrap();
     // assert!(item.filename.contains("leatherface"));
 }

@@ -1,5 +1,6 @@
 use std::net::Ipv4Addr;
 use crate::message::unpack::Unpack;
+
 #[derive(Clone, Debug)]
 pub enum ServerResponses {
     LoginResponse(LoginResponse)
@@ -12,32 +13,6 @@ pub struct LoginResponse {
     pub(crate) ip: Option<Ipv4Addr>,
     pub(crate) hash: Option<String>,
     pub(crate) is_supporter: Option<bool>
-}
-
-pub struct RoomList {
-    pub number_of_rooms: u32
-}
-
-pub struct PrivilegedUsers {
-    pub number_of_users: u32,
-    pub users: Vec<String>
-}
-
-pub struct ParentMinSpeed {
-    pub speed: u32
-}
-
-pub struct ParentSpeedRatio {
-    pub ratio: u32
-}
-
-pub struct WishlistInterval {
-    pub interval: u32
-}
-
-pub struct ExcludedSearchPhrases {
-    pub count: u32,
-    pub phrases: Vec<String>
 }
 
 impl Unpack for LoginResponse {
@@ -63,6 +38,53 @@ impl Unpack for LoginResponse {
             }
         }
     }
+}
+
+pub struct ConnectToPeer {
+    pub username: String,
+    pub connection_type: String, // TODO: this could be an enum
+    pub ip: Ipv4Addr,
+    pub port: u32,
+    pub token: u32
+}
+
+impl Unpack for ConnectToPeer {
+    fn unpack(bytes: &mut Vec<u8>) -> Self {
+        let username = <String>::unpack(bytes);
+        let connection_type = <String>::unpack(bytes);
+        let ip = <Ipv4Addr>::unpack(bytes);
+        let port = <u32>::unpack(bytes);
+        let token = <u32>::unpack(bytes);
+
+        ConnectToPeer { username, connection_type, ip, port, token }
+    }
+}
+
+
+pub struct RoomList {
+    pub number_of_rooms: u32
+}
+
+pub struct PrivilegedUsers {
+    pub number_of_users: u32,
+    pub users: Vec<String>
+}
+
+pub struct ParentMinSpeed {
+    pub speed: u32
+}
+
+pub struct ParentSpeedRatio {
+    pub ratio: u32
+}
+
+pub struct WishlistInterval {
+    pub interval: u32
+}
+
+pub struct ExcludedSearchPhrases {
+    pub count: u32,
+    pub phrases: Vec<String>
 }
 
 impl Unpack for RoomList {

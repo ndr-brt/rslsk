@@ -10,8 +10,9 @@ use crate::command_handlers::login_command_handler::LoginHandler;
 use crate::commands::Command;
 use crate::events::{Event, SearchResultItem};
 use crate::message::pack::Pack;
+use crate::message::peer::PeerInit;
 use crate::message::server_requests::{FileSearch, ServerRequests};
-use crate::message::server_responses::{ExcludedSearchPhrases, LoginResponse, ParentMinSpeed, ParentSpeedRatio, PrivilegedUsers, RoomList, ServerResponses, WishlistInterval};
+use crate::message::server_responses::{ConnectToPeer, ExcludedSearchPhrases, LoginResponse, ParentMinSpeed, ParentSpeedRatio, PrivilegedUsers, RoomList, ServerResponses, WishlistInterval};
 use crate::message::unpack::Unpack;
 
 pub(crate) struct Server {
@@ -31,24 +32,46 @@ impl Server {
 
         tokio::spawn(async move {
             let listener = TcpListener::bind("0.0.0.0:2234").await.unwrap();
-            println!("Listener estabilished");
+            println!("Listening for connections on: {}", listener.local_addr().unwrap());
             loop {
                 let (mut listener_stream, socket_address) = listener.accept().await.unwrap();
 
-                println!("Listening for messages on port 2234. {}", socket_address);
+                println!("Incoming connection from {}", socket_address);
 
                 tokio::spawn(async move {
                     let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
                     match listener_stream.read_exact(&mut length_buffer).await {
                         Ok(_len) => (),
-                        Err(_err) => return,
+                        Err(_err) => { return },
                     }
 
                     let length = u32::from_le_bytes(length_buffer);
                     let mut bytes: Vec<u8> = vec![0; length as usize];
                     let _ = listener_stream.read_exact(&mut bytes).await;
 
-                    match <u32>::unpack(&mut bytes) {
+                    match <u8>::unpack(&mut bytes) {
+                        1 => {
+                            let message = <PeerInit>::unpack(&mut bytes);
+                            println!("Received from peer: PeerInit: username: {}. type: {}. token: {}", message.username, message.connection_type, message.token);
+
+                            // received peerinit, now we can receive messages from peer
+                            tokio::spawn(async move {
+                                // TODO: refactor this duplication!
+                                let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
+                                match listener_stream.read_exact(&mut length_buffer).await {
+                                    Ok(_len) => (),
+                                    Err(_err) => { return },
+                                }
+
+                                let length = u32::from_le_bytes(length_buffer);
+                                let mut bytes: Vec<u8> = vec![0; length as usize];
+                                let _ = listener_stream.read_exact(&mut bytes).await;
+
+                                match <u32>::unpack(&mut bytes) {
+                                    code => println!("Received from peer: Unknown message code: {}, length: {}", code, length)
+                                }
+                            });
+                        }
                         code => println!("Received from peer: Unknown message code: {}, length: {}", code, length)
                     }
                 });
@@ -112,6 +135,10 @@ async fn handle_server_input(mut read_socket: tokio::net::tcp::OwnedReadHalf, ms
                 let response = <LoginResponse>::unpack(&mut bytes);
                 println!("Received from server: LoginResponse. success: {}. message: {}. address: {:?}", response.success, response.message, response.ip);
                 msg_tx.send(ServerResponses::LoginResponse(response)).unwrap();
+            }
+            18 => {
+                let response = <ConnectToPeer>::unpack(&mut bytes);
+                println!("Received from server: ConnectToPeer. token: {}. username: {}. type: {}", response.token, response.username, response.connection_type)
             }
             64 => {
                 let response = <RoomList>::unpack(&mut bytes);
