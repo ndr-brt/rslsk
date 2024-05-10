@@ -19,6 +19,15 @@ impl Unpack for u32 {
     }
 }
 
+impl Unpack for u64 {
+    fn unpack(bytes: &mut Vec<u8>) -> Self {
+        let mut buf: [u8; 8] = [0; 8];
+        let drain: Vec<u8> = bytes.drain(..8).collect();
+        buf.copy_from_slice(&drain);
+        return u64::from_le_bytes(buf);
+    }
+}
+
 impl Unpack for bool {
     fn unpack(bytes: &mut Vec<u8>) -> Self {
         let drain: Vec<u8> = bytes.drain(..1).collect();
