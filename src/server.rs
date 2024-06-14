@@ -2,15 +2,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use rand::random;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::net::tcp::OwnedWriteHalf;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::{broadcast, mpsc};
 use tokio::sync::Mutex;
 
 use crate::command_handlers::login_command_handler::LoginHandler;
 use crate::commands::Command;
 use crate::events::{Event, SearchResultItem};
+use crate::message::next_packet::NextPacket;
 use crate::message::pack::Pack;
 use crate::message::peer::{FileSearchResponse, PeerInit};
 use crate::message::server_requests::{FileSearch, ServerRequests};
@@ -70,53 +71,45 @@ async fn command_handler(
     }
 }
 
-async fn server_message_receiver(mut read_socket: tokio::net::tcp::OwnedReadHalf, msg_tx: broadcast::Sender<ServerResponses>) {
+async fn server_message_receiver(mut read_socket: OwnedReadHalf, msg_tx: broadcast::Sender<ServerResponses>) {
     loop {
-        let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
-        match read_socket.read_exact(&mut length_buffer).await {
-            Ok(_len) => (),
-            Err(_err) => return,
-        }
+        let mut packet = read_socket.next_packet().await.expect("cannot read server packet");
 
-        let length = u32::from_le_bytes(length_buffer);
-        let mut bytes: Vec<u8> = vec![0; length as usize];
-        let _ = read_socket.read_exact(&mut bytes).await;
-
-        match <u32>::unpack(&mut bytes) {
+        match <u32>::unpack(&mut packet) {
             1 => {
-                let response = <LoginResponse>::unpack(&mut bytes);
+                let response = <LoginResponse>::unpack(&mut packet);
                 println!("Received from server: LoginResponse. success: {}. message: {}. address: {:?}", response.success, response.message, response.ip);
                 msg_tx.send(ServerResponses::LoginResponse(response)).unwrap();
             }
             18 => {
-                let response = <ConnectToPeer>::unpack(&mut bytes);
+                let response = <ConnectToPeer>::unpack(&mut packet);
                 println!("Received from server: ConnectToPeer. token: {}. username: {}. type: {}", response.token, response.username, response.connection_type)
             }
             64 => {
-                let response = <RoomList>::unpack(&mut bytes);
+                let response = <RoomList>::unpack(&mut packet);
                 println!("Received from server: RoomList. count: {}", response.number_of_rooms)
             }
             69 => {
-                let response = <PrivilegedUsers>::unpack(&mut bytes);
+                let response = <PrivilegedUsers>::unpack(&mut packet);
                 println!("Received from server: PrivilegedUsers. number {}", response.number_of_users)
             }
             83 => {
-                let response = <ParentMinSpeed>::unpack(&mut bytes);
+                let response = <ParentMinSpeed>::unpack(&mut packet);
                 println!("Received from server: ParentMinSpeed. speed: {}", response.speed);
             }
             84 => {
-                let response = <ParentSpeedRatio>::unpack(&mut bytes);
+                let response = <ParentSpeedRatio>::unpack(&mut packet);
                 println!("Received from server: ParentSpeedRatio. ratio: {}", response.ratio);
             }
             104 => {
-                let response = <WishlistInterval>::unpack(&mut bytes);
+                let response = <WishlistInterval>::unpack(&mut packet);
                 println!("Received from server: WishlistInterval. ratio: {}", response.interval);
             }
             160 => {
-                let response = <ExcludedSearchPhrases>::unpack(&mut bytes);
+                let response = <ExcludedSearchPhrases>::unpack(&mut packet);
                 println!("Received from server: ExcludedSearchPhrases. count {}. phrases: {:?}", response.count, response.phrases)
             }
-            code => println!("Received from server: Unknown message code: {}, length: {}", code, length)
+            code => println!("Received from server: Unknown message code: {}, length: {}", code, packet.len())
         }
     }
 }
@@ -136,59 +129,49 @@ async fn peer_connections_listener(searches: Searches) {
     println!("Listening for connections on: {}", listener.local_addr().unwrap());
     loop {
         let (listener_stream, socket_address) = listener.accept().await.unwrap();
+        let (read_stream, _write_stream) = listener_stream.into_split();
 
         println!("Incoming connection from {}", socket_address);
 
-        tokio::spawn(peer_init_message_receiver(listener_stream, Arc::clone(&searches)));
+        tokio::spawn(peer_init_message_receiver(read_stream, Arc::clone(&searches)));
     }
 }
 
-async fn peer_init_message_receiver(mut listener_stream: TcpStream, searches: Searches) {
-    let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
-    match listener_stream.read_exact(&mut length_buffer).await {
-        Ok(_len) => (),
-        Err(_err) => { return },
-    }
+async fn peer_init_message_receiver(mut read_stream: OwnedReadHalf, searches: Searches) {
+    let mut packet = read_stream.next_packet().await.expect("cannot read peer packet");
 
-    let length = u32::from_le_bytes(length_buffer);
-    let mut bytes: Vec<u8> = vec![0; length as usize];
-    let _ = listener_stream.read_exact(&mut bytes).await;
-
-    match <u8>::unpack(&mut bytes) {
+    match <u8>::unpack(&mut packet) {
         1 => {
-            let message = <PeerInit>::unpack(&mut bytes);
+            let message = <PeerInit>::unpack(&mut packet);
             println!("Received from peer: PeerInit: username: {}. type: {}. token: {}", message.username, message.connection_type, message.token);
 
-            tokio::spawn(peer_message_receiver(listener_stream, Arc::clone(&searches)));
+            tokio::spawn(peer_message_receiver(read_stream, Arc::clone(&searches)));
         }
-        code => println!("Received from peer: Unknown message code: {}, length: {}", code, length)
+        code => println!("Received from peer: Unknown message code: {}, length: {}", code, packet.len())
     }
 }
 
-async fn peer_message_receiver(mut listener_stream: TcpStream, searches: Searches) {
-    // TODO: refactor this duplication!
-    let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
-    match listener_stream.read_exact(&mut length_buffer).await {
-        Ok(_len) => (),
-        Err(_err) => { return },
-    }
+async fn peer_message_receiver(mut read_stream: OwnedReadHalf, searches: Searches) {
+    let mut packet = read_stream.next_packet().await.expect("cannot read peer packet");
 
-    let length = u32::from_le_bytes(length_buffer);
-    let mut bytes: Vec<u8> = vec![0; length as usize];
-    let _ = listener_stream.read_exact(&mut bytes).await;
-
-    match <u32>::unpack(&mut bytes) {
+    match <u32>::unpack(&mut packet) {
         9 => {
-            let message = <FileSearchResponse>::unpack(&mut bytes);
+            let message = <FileSearchResponse>::unpack(&mut packet);
             println!("Received from peer: FileSearchResponse. username {}, token {}, count {}", message.username, message.token, message.results.len());
             let mut guard = searches.lock().await;
             for item in message.results {
-                let sender = guard.get_mut(&message.token).unwrap();
-                let username = message.username.clone();
-                let search_item = SearchResultItem { username, filename: item.filename };
-                sender.send(search_item).await.unwrap()
+                match guard.get_mut(&message.token) {
+                    Some(sender) => {
+                        let username = message.username.clone();
+                        let search_item = SearchResultItem { username, filename: item.filename };
+                        sender.send(search_item).await.unwrap()
+                    },
+                    None => {
+                        println!("no search result sender available. what do?")
+                    }
+                }
             }
         }
-        code => println!("Received from peer: Unknown message code: {}, length: {}", code, length)
+        code => println!("Received from peer: Unknown message code: {}, length: {}", code, packet.len())
     }
 }
