@@ -1,6 +1,8 @@
 use std::time::Duration;
-use rslsk::Slsk;
 
+use tokio::time::timeout;
+
+use rslsk::Slsk;
 
 #[tokio::test]
 async fn login() {
@@ -22,8 +24,8 @@ async fn search() {
     let result = slsk.search(String::from("leatherface")).await;
 
     assert!(result.is_ok());
-    tokio::time::sleep(Duration::from_secs(10)).await;
 
-    // let item = result.unwrap().recv().await.unwrap();
-    // assert!(item.filename.contains("leatherface"));
+    let mut receiver = result.unwrap();
+    let item = timeout(Duration::from_secs(10), receiver.recv()).await.unwrap().unwrap();
+    assert!(item.filename.to_lowercase().contains("leatherface"));
 }
