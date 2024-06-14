@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::sync::Arc;
 
 use rand::random;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio::net::tcp::OwnedWriteHalf;
 use tokio::sync::{broadcast, mpsc};
 use tokio::sync::Mutex;
 
@@ -21,119 +21,56 @@ pub(crate) struct Server {
     pub(crate) command_sender: mpsc::Sender<Command>
 }
 
+type Searches = Arc<Mutex<HashMap<u32, mpsc::Sender<SearchResultItem>>>>;
+
 impl Server {
     pub(crate) async fn new(socket: TcpStream) -> Self {
-        let (read_socket, mut write_socket) = socket.into_split();
+        let (read_socket, write_socket) = socket.into_split();
 
-        let (command_sender, mut command_receiver) = mpsc::channel(8);
-        let (server_requests, mut message_receiver) = mpsc::channel::<ServerRequests>(8);
+        let (command_bus_sender, command_bus_receiver) = mpsc::channel(8);
+        let (outgoing_server_message_bus_sender, outgoing_server_message_bus_receiver) = mpsc::channel::<ServerRequests>(8);
         let (msg_tx, server_responses) = broadcast::channel::<ServerResponses>(8);
 
-        let mut searches: Arc<Mutex<HashMap<u32, mpsc::Sender<SearchResultItem>>>> = Arc::new(Mutex::new(HashMap::new()));
+        let searches: Searches = Arc::new(Mutex::new(HashMap::new()));
 
-        let searches2 = Arc::clone(&searches);
-        tokio::spawn(async move {
-            let listener = TcpListener::bind("0.0.0.0:2234").await.unwrap();
-            println!("Listening for connections on: {}", listener.local_addr().unwrap());
-            loop {
-                let (mut listener_stream, socket_address) = listener.accept().await.unwrap();
+        tokio::spawn(server_message_receiver(read_socket, msg_tx));
+        tokio::spawn(server_message_sender(outgoing_server_message_bus_receiver, write_socket));
+        tokio::spawn(peer_connections_listener(Arc::clone(&searches)));
+        tokio::spawn(command_handler(command_bus_receiver, outgoing_server_message_bus_sender, server_responses, Arc::clone(&searches)));
 
-                println!("Incoming connection from {}", socket_address);
-
-                let searches3 = Arc::clone(&searches2);
-                tokio::spawn(async move {
-                    let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
-                    match listener_stream.read_exact(&mut length_buffer).await {
-                        Ok(_len) => (),
-                        Err(_err) => { return },
-                    }
-
-                    let length = u32::from_le_bytes(length_buffer);
-                    let mut bytes: Vec<u8> = vec![0; length as usize];
-                    let _ = listener_stream.read_exact(&mut bytes).await;
-
-                    match <u8>::unpack(&mut bytes) {
-                        1 => {
-                            let message = <PeerInit>::unpack(&mut bytes);
-                            println!("Received from peer: PeerInit: username: {}. type: {}. token: {}", message.username, message.connection_type, message.token);
-
-                            // received peerinit, now we can receive messages from peer
-                            let searches4 = Arc::clone(&searches3);
-                            tokio::spawn(async move {
-                                // TODO: refactor this duplication!
-                                let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
-                                match listener_stream.read_exact(&mut length_buffer).await {
-                                    Ok(_len) => (),
-                                    Err(_err) => { return },
-                                }
-
-                                let length = u32::from_le_bytes(length_buffer);
-                                let mut bytes: Vec<u8> = vec![0; length as usize];
-                                let _ = listener_stream.read_exact(&mut bytes).await;
-
-                                match <u32>::unpack(&mut bytes) {
-                                    9 => {
-                                        let message = <FileSearchResponse>::unpack(&mut bytes);
-                                        println!("Received from peer: FileSearchResponse. username {}, token {}, count {}", message.username, message.token, message.results.len());
-                                        let mut guard = searches4.lock().await;
-                                        for item in message.results {
-                                        let sender = guard.get_mut(&message.token).unwrap();
-                                            let username = message.username.clone();
-                                            let search_item = SearchResultItem { username, filename: item.filename };
-                                            sender.send(search_item).await.unwrap()
-                                        }
-                                    }
-                                    code => println!("Received from peer: Unknown message code: {}, length: {}", code, length)
-                                }
-                            });
-                        }
-                        code => println!("Received from peer: Unknown message code: {}, length: {}", code, length)
-                    }
-                });
-
-            }
-        });
-
-        tokio::spawn(handle_server_input(read_socket, msg_tx));
-
-        tokio::spawn(async move {
-            while let Some(message) = message_receiver.recv().await {
-                let message_vec = message.pack();
-                match write_socket.write(message_vec.pack().as_slice()).await {
-                    Ok(count) => println!("Message sent: Wrote {} bytes to server", count),
-                    Err(e) => std::panic::panic_any(e)
-                }
-            }
-        });
-
-        tokio::spawn(async move {
-            while let Some(command) = command_receiver.recv().await {
-                match command {
-                    Command::Login { username, password, tx } => {
-                        LoginHandler::new(server_requests.clone(), server_responses.resubscribe())
-                            .handle(username, password, tx)
-                            .await;
-                    },
-                    Command::Search { query, tx} => {
-                        let token = random::<u32>();
-                        server_requests.clone().send(ServerRequests::FileSearch(FileSearch { token, query })).await.unwrap();
-
-                        let (search_results_sender, search_results_receiver) = mpsc::channel::<SearchResultItem>(1024);
-                        searches.lock().await.insert(token, search_results_sender);
-
-                        let event = Event::SearchResultReceived { recv: search_results_receiver };
-                        tx.send(event).unwrap();
-                    }
-                }
-            }
-        });
-
-        Server { command_sender }
+        Server { command_sender: command_bus_sender }
     }
 
 }
 
-async fn handle_server_input(mut read_socket: tokio::net::tcp::OwnedReadHalf, msg_tx: broadcast::Sender<ServerResponses>) {
+async fn command_handler(
+    mut command_receiver: mpsc::Receiver<Command>,
+    outgoing_server_message_bus_sender: mpsc::Sender<ServerRequests>,
+    server_responses: broadcast::Receiver<ServerResponses>,
+    searches: Searches
+) {
+    while let Some(command) = command_receiver.recv().await {
+        match command {
+            Command::Login { username, password, tx } => {
+                LoginHandler::new(outgoing_server_message_bus_sender.clone(), server_responses.resubscribe())
+                    .handle(username, password, tx)
+                    .await;
+            },
+            Command::Search { query, tx} => {
+                let token = random::<u32>();
+                outgoing_server_message_bus_sender.clone().send(ServerRequests::FileSearch(FileSearch { token, query })).await.unwrap();
+
+                let (search_results_sender, search_results_receiver) = mpsc::channel::<SearchResultItem>(1024);
+                searches.lock().await.insert(token, search_results_sender);
+
+                let event = Event::SearchResultReceived { recv: search_results_receiver };
+                tx.send(event).unwrap();
+            }
+        }
+    }
+}
+
+async fn server_message_receiver(mut read_socket: tokio::net::tcp::OwnedReadHalf, msg_tx: broadcast::Sender<ServerResponses>) {
     loop {
         let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
         match read_socket.read_exact(&mut length_buffer).await {
@@ -181,5 +118,77 @@ async fn handle_server_input(mut read_socket: tokio::net::tcp::OwnedReadHalf, ms
             }
             code => println!("Received from server: Unknown message code: {}, length: {}", code, length)
         }
+    }
+}
+
+async fn server_message_sender(mut message_receiver: mpsc::Receiver<ServerRequests>, mut write_socket: OwnedWriteHalf) {
+    while let Some(message) = message_receiver.recv().await {
+        let message_vec = message.pack();
+        match write_socket.write(message_vec.pack().as_slice()).await {
+            Ok(count) => println!("Message sent: Wrote {} bytes to server", count),
+            Err(e) => std::panic::panic_any(e)
+        }
+    }
+}
+
+async fn peer_connections_listener(searches: Searches) {
+    let listener = TcpListener::bind("0.0.0.0:2234").await.unwrap();
+    println!("Listening for connections on: {}", listener.local_addr().unwrap());
+    loop {
+        let (listener_stream, socket_address) = listener.accept().await.unwrap();
+
+        println!("Incoming connection from {}", socket_address);
+
+        tokio::spawn(peer_init_message_receiver(listener_stream, Arc::clone(&searches)));
+    }
+}
+
+async fn peer_init_message_receiver(mut listener_stream: TcpStream, searches: Searches) {
+    let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
+    match listener_stream.read_exact(&mut length_buffer).await {
+        Ok(_len) => (),
+        Err(_err) => { return },
+    }
+
+    let length = u32::from_le_bytes(length_buffer);
+    let mut bytes: Vec<u8> = vec![0; length as usize];
+    let _ = listener_stream.read_exact(&mut bytes).await;
+
+    match <u8>::unpack(&mut bytes) {
+        1 => {
+            let message = <PeerInit>::unpack(&mut bytes);
+            println!("Received from peer: PeerInit: username: {}. type: {}. token: {}", message.username, message.connection_type, message.token);
+
+            tokio::spawn(peer_message_receiver(listener_stream, Arc::clone(&searches)));
+        }
+        code => println!("Received from peer: Unknown message code: {}, length: {}", code, length)
+    }
+}
+
+async fn peer_message_receiver(mut listener_stream: TcpStream, searches: Searches) {
+    // TODO: refactor this duplication!
+    let mut length_buffer: [u8; 4] = [0, 0, 0, 0];
+    match listener_stream.read_exact(&mut length_buffer).await {
+        Ok(_len) => (),
+        Err(_err) => { return },
+    }
+
+    let length = u32::from_le_bytes(length_buffer);
+    let mut bytes: Vec<u8> = vec![0; length as usize];
+    let _ = listener_stream.read_exact(&mut bytes).await;
+
+    match <u32>::unpack(&mut bytes) {
+        9 => {
+            let message = <FileSearchResponse>::unpack(&mut bytes);
+            println!("Received from peer: FileSearchResponse. username {}, token {}, count {}", message.username, message.token, message.results.len());
+            let mut guard = searches.lock().await;
+            for item in message.results {
+                let sender = guard.get_mut(&message.token).unwrap();
+                let username = message.username.clone();
+                let search_item = SearchResultItem { username, filename: item.filename };
+                sender.send(search_item).await.unwrap()
+            }
+        }
+        code => println!("Received from peer: Unknown message code: {}, length: {}", code, length)
     }
 }
