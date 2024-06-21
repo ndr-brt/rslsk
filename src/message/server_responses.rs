@@ -11,8 +11,8 @@ pub struct LoginResponse {
     pub success: bool,
     pub message: String,
     pub(crate) ip: Option<Ipv4Addr>,
-    pub(crate) hash: Option<String>,
-    pub(crate) is_supporter: Option<bool>
+    pub(crate) _hash: Option<String>,
+    pub(crate) _is_supporter: Option<bool>
 }
 
 impl Unpack for LoginResponse {
@@ -25,16 +25,16 @@ impl Unpack for LoginResponse {
                 success,
                 message,
                 ip: Some(<Ipv4Addr>::unpack(bytes)),
-                hash: Some(<String>::unpack(bytes)),
-                is_supporter: Some(<bool>::unpack(bytes)),
+                _hash: Some(<String>::unpack(bytes)),
+                _is_supporter: Some(<bool>::unpack(bytes)),
             }
         } else {
             LoginResponse {
                 success,
                 message,
                 ip: None,
-                hash: None,
-                is_supporter: None,
+                _hash: None,
+                _is_supporter: None,
             }
         }
     }

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use rand::random;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -9,12 +8,13 @@ use tokio::sync::{broadcast, mpsc};
 use tokio::sync::Mutex;
 
 use crate::command_handlers::login_command_handler::LoginHandler;
+use crate::command_handlers::search_command_handler::SearchHandler;
 use crate::commands::Command;
-use crate::events::{Event, SearchResultItem};
+use crate::events::SearchResultItem;
 use crate::message::next_packet::NextPacket;
 use crate::message::pack::Pack;
 use crate::message::peer::{FileSearchResponse, PeerInit};
-use crate::message::server_requests::{FileSearch, ServerRequests};
+use crate::message::server_requests::ServerRequests;
 use crate::message::server_responses::{ConnectToPeer, ExcludedSearchPhrases, LoginResponse, ParentMinSpeed, ParentSpeedRatio, PrivilegedUsers, RoomList, ServerResponses, WishlistInterval};
 use crate::message::unpack::Unpack;
 
@@ -22,7 +22,7 @@ pub(crate) struct Server {
     pub(crate) command_sender: mpsc::Sender<Command>
 }
 
-type Searches = Arc<Mutex<HashMap<u32, mpsc::Sender<SearchResultItem>>>>;
+pub type Searches = Arc<Mutex<HashMap<u32, mpsc::Sender<SearchResultItem>>>>;
 
 impl Server {
     pub(crate) async fn new(socket: TcpStream) -> Self {
@@ -58,14 +58,9 @@ async fn command_handler(
                     .await;
             },
             Command::Search { query, tx} => {
-                let token = random::<u32>();
-                outgoing_server_message_bus_sender.clone().send(ServerRequests::FileSearch(FileSearch { token, query })).await.unwrap();
-
-                let (search_results_sender, search_results_receiver) = mpsc::channel::<SearchResultItem>(1024);
-                searches.lock().await.insert(token, search_results_sender);
-
-                let event = Event::SearchResultReceived { recv: search_results_receiver };
-                tx.send(event).unwrap();
+                SearchHandler::new(outgoing_server_message_bus_sender.clone(), Arc::clone(&searches))
+                    .handle(query, tx)
+                    .await;
             }
         }
     }
