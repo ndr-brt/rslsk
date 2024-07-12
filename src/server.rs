@@ -10,6 +10,7 @@ use tokio::sync::Mutex;
 use crate::command_handlers::login_command_handler::LoginHandler;
 use crate::command_handlers::search_command_handler::SearchHandler;
 use crate::commands::Command;
+use crate::events::Event::DownloadFailed;
 use crate::events::SearchResultItem;
 use crate::message::next_packet::NextPacket;
 use crate::message::pack::Pack;
@@ -17,12 +18,14 @@ use crate::message::peer::{FileSearchResponse, PeerInit};
 use crate::message::server_requests::ServerRequests;
 use crate::message::server_responses::{ConnectToPeer, ExcludedSearchPhrases, LoginResponse, ParentMinSpeed, ParentSpeedRatio, PrivilegedUsers, RoomList, ServerResponses, WishlistInterval};
 use crate::message::unpack::Unpack;
+use crate::peer::Peer;
 
 pub(crate) struct Server {
     pub(crate) command_sender: mpsc::Sender<Command>
 }
 
 pub type Searches = Arc<Mutex<HashMap<u32, mpsc::Sender<SearchResultItem>>>>;
+pub type Peers = Arc<Mutex<HashMap<String, Peer>>>;
 
 impl Server {
     pub(crate) async fn new(socket: TcpStream) -> Self {
@@ -33,11 +36,12 @@ impl Server {
         let (msg_tx, server_responses) = broadcast::channel::<ServerResponses>(8);
 
         let searches: Searches = Arc::new(Mutex::new(HashMap::new()));
+        let peers: Peers = Arc::new(Mutex::new(HashMap::new()));
 
         tokio::spawn(server_message_receiver(read_socket, msg_tx));
         tokio::spawn(server_message_sender(outgoing_server_message_bus_receiver, write_socket));
-        tokio::spawn(peer_connections_listener(Arc::clone(&searches)));
-        tokio::spawn(command_handler(command_bus_receiver, outgoing_server_message_bus_sender, server_responses, Arc::clone(&searches)));
+        tokio::spawn(peer_connections_listener(Arc::clone(&searches), Arc::clone(&peers)));
+        tokio::spawn(command_handler(command_bus_receiver, outgoing_server_message_bus_sender, server_responses, Arc::clone(&searches), Arc::clone(&peers)));
 
         Server { command_sender: command_bus_sender }
     }
@@ -48,7 +52,8 @@ async fn command_handler(
     mut command_receiver: mpsc::Receiver<Command>,
     outgoing_server_message_bus_sender: mpsc::Sender<ServerRequests>,
     server_responses: broadcast::Receiver<ServerResponses>,
-    searches: Searches
+    searches: Searches,
+    peers: Peers
 ) {
     while let Some(command) = command_receiver.recv().await {
         match command {
@@ -61,6 +66,17 @@ async fn command_handler(
                 SearchHandler::new(outgoing_server_message_bus_sender.clone(), Arc::clone(&searches))
                     .handle(query, tx)
                     .await;
+            },
+            Command::Download { item, destination, tx } => {
+                // start download, save to file, return good!
+                match peers.lock().await.get(&item.username) {
+                    Some(peer) => {
+
+                    }
+                    None => {
+                        tx.send(DownloadFailed { message: format!("Cannot find peer {}", item.username) }).unwrap()
+                    }
+                }
             }
         }
     }
@@ -119,7 +135,7 @@ async fn server_message_sender(mut message_receiver: mpsc::Receiver<ServerReques
     }
 }
 
-async fn peer_connections_listener(searches: Searches) {
+async fn peer_connections_listener(searches: Searches, peers: Peers) {
     let listener = TcpListener::bind("0.0.0.0:2234").await.unwrap();
     println!("Listening for connections on: {}", listener.local_addr().unwrap());
     loop {
@@ -128,44 +144,19 @@ async fn peer_connections_listener(searches: Searches) {
 
         println!("Incoming connection from {}", socket_address);
 
-        tokio::spawn(peer_init_message_receiver(read_stream, Arc::clone(&searches)));
+        tokio::spawn(peer_init_message_receiver(read_stream, Arc::clone(&searches), Arc::clone(&peers)));
     }
 }
 
-async fn peer_init_message_receiver(mut read_stream: OwnedReadHalf, searches: Searches) {
+async fn peer_init_message_receiver(mut read_stream: OwnedReadHalf, searches: Searches, peers: Peers) {
     let mut packet = read_stream.next_packet().await.expect("cannot read peer packet");
 
     match <u8>::unpack(&mut packet) {
         1 => {
             let message = <PeerInit>::unpack(&mut packet);
             println!("Received from peer: PeerInit: username: {}. type: {}. token: {}", message.username, message.connection_type, message.token);
-
-            tokio::spawn(peer_message_receiver(read_stream, Arc::clone(&searches)));
-        }
-        code => println!("Received from peer: Unknown message code: {}, length: {}", code, packet.len())
-    }
-}
-
-async fn peer_message_receiver(mut read_stream: OwnedReadHalf, searches: Searches) {
-    let mut packet = read_stream.next_packet().await.expect("cannot read peer packet");
-
-    match <u32>::unpack(&mut packet) {
-        9 => {
-            let message = <FileSearchResponse>::unpack(&mut packet);
-            println!("Received from peer: FileSearchResponse. username {}, token {}, count {}", message.username, message.token, message.results.len());
-            let mut guard = searches.lock().await;
-            for item in message.results {
-                match guard.get_mut(&message.token) {
-                    Some(sender) => {
-                        let username = message.username.clone();
-                        let search_item = SearchResultItem { username, filename: item.filename };
-                        sender.send(search_item).await.unwrap()
-                    },
-                    None => {
-                        println!("no search result sender available. what do?")
-                    }
-                }
-            }
+            let username = message.username.clone();
+            peers.lock().await.insert(message.username, Peer::new(username, read_stream, Arc::clone(&searches)));
         }
         code => println!("Received from peer: Unknown message code: {}, length: {}", code, packet.len())
     }

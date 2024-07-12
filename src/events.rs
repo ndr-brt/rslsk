@@ -4,7 +4,8 @@ use tokio::sync::mpsc;
 pub enum Event {
     LoginSucceeded { message: String },
     LoginFailed { message: String },
-    SearchResultReceived { recv: mpsc::Receiver<SearchResultItem> }
+    SearchResultReceived { recv: mpsc::Receiver<SearchResultItem> },
+    DownloadFailed { message: String }
 }
 
 #[derive(Debug)]

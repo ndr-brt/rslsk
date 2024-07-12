@@ -1,4 +1,5 @@
 use std::io::{Error, ErrorKind};
+use std::path::Path;
 
 use tokio::io::Result;
 use tokio::net::TcpStream;
@@ -16,6 +17,7 @@ mod message;
 pub mod events;
 mod commands;
 pub mod command_handlers;
+mod peer;
 
 pub struct Slsk {
     username: String,
@@ -86,6 +88,22 @@ impl Slsk {
                 }
             },
             Err(_err) => Err(Error::new(ErrorKind::Other, "cannot search"))
+        }
+    }
+
+    pub async fn download(&self, item: SearchResultItem, destination: String) -> Result<bool> {
+        let (tx, rx) = oneshot::channel::<Event>();
+
+        let command = Command::Download { item, destination, tx };
+        self.command_bus.send(command).await.unwrap();
+
+        let response = rx.await;
+
+        match response {
+            Ok(event) => {
+                Ok(true) // TODO: mmmmhhh
+            },
+            Err(_err) => Err(Error::new(ErrorKind::Other, "cannot download"))
         }
     }
 
