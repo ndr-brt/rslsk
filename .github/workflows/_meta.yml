@@ -1,0 +1,11 @@
+name: Meta
+
+on:
+  issues:
+  pull_request:
+
+jobs:
+  meta:
+    uses: ./.github/workflows/meta.yml
+    secrets:
+      envGH: ${{ secrets.GITHUB_TOKEN }}
