@@ -1,27 +1,24 @@
 use std::sync::Arc;
 
-use tokio::net::tcp::OwnedReadHalf;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 use crate::events::SearchResultItem;
 use crate::message::next_packet::NextPacket;
-use crate::message::peer::FileSearchResponse;
+use crate::message::peer_responses::FileSearchResponse;
 use crate::message::unpack::Unpack;
 use crate::server::Searches;
 
 pub struct Peer {
-    username: String
+    pub username: String,
+    write_stream: OwnedWriteHalf
 }
 
 impl Peer {
 
-    pub(crate) fn new(username: String, read_stream: OwnedReadHalf, searches: Searches) -> Peer {
-        let peer = Peer { username };
-        peer.listen(read_stream, searches);
-        peer
-    }
-
-    fn listen(&self, read_stream: OwnedReadHalf, searches: Searches) {
+    pub(crate) fn new(username: String, read_stream: OwnedReadHalf, write_stream: OwnedWriteHalf, searches: Searches) -> Peer {
+        let peer = Peer { username, write_stream };
         tokio::spawn(Self::peer_message_receiver(read_stream, Arc::clone(&searches)));
+        peer
     }
 
     async fn peer_message_receiver(mut read_stream: OwnedReadHalf, searches: Searches) {
@@ -47,6 +44,10 @@ impl Peer {
             }
             code => println!("Received from peer: Unknown message code: {}, length: {}", code, packet.len())
         }
+    }
+
+    pub fn transfer_request(&self) {
+
     }
 
 }

@@ -5,10 +5,11 @@ pub enum Event {
     LoginSucceeded { message: String },
     LoginFailed { message: String },
     SearchResultReceived { recv: mpsc::Receiver<SearchResultItem> },
+    DownloadStarted { message: String },
     DownloadFailed { message: String }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SearchResultItem {
     pub username: String,
     pub filename: String

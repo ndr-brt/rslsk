@@ -103,7 +103,7 @@ impl Slsk {
             Ok(event) => {
                 Ok(true) // TODO: mmmmhhh
             },
-            Err(_err) => Err(Error::new(ErrorKind::Other, "cannot download"))
+            Err(_err) => Err(Error::new(ErrorKind::Other, format!("cannot download: {}", _err)))
         }
     }
 

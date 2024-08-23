@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::format;
 use std::sync::Arc;
 
 use tokio::io::AsyncWriteExt;
@@ -10,11 +11,11 @@ use tokio::sync::Mutex;
 use crate::command_handlers::login_command_handler::LoginHandler;
 use crate::command_handlers::search_command_handler::SearchHandler;
 use crate::commands::Command;
-use crate::events::Event::DownloadFailed;
+use crate::events::Event::{DownloadFailed, DownloadStarted};
 use crate::events::SearchResultItem;
 use crate::message::next_packet::NextPacket;
 use crate::message::pack::Pack;
-use crate::message::peer::{FileSearchResponse, PeerInit};
+use crate::message::peer_responses::{FileSearchResponse, PeerInit};
 use crate::message::server_requests::ServerRequests;
 use crate::message::server_responses::{ConnectToPeer, ExcludedSearchPhrases, LoginResponse, ParentMinSpeed, ParentSpeedRatio, PrivilegedUsers, RoomList, ServerResponses, WishlistInterval};
 use crate::message::unpack::Unpack;
@@ -71,7 +72,7 @@ async fn command_handler(
                 // start download, save to file, return good!
                 match peers.lock().await.get(&item.username) {
                     Some(peer) => {
-
+                        tx.send(DownloadStarted { message: format!("Download from {} started", peer.username)  }).unwrap()
                     }
                     None => {
                         tx.send(DownloadFailed { message: format!("Cannot find peer {}", item.username) }).unwrap()
@@ -140,15 +141,15 @@ async fn peer_connections_listener(searches: Searches, peers: Peers) {
     println!("Listening for connections on: {}", listener.local_addr().unwrap());
     loop {
         let (listener_stream, socket_address) = listener.accept().await.unwrap();
-        let (read_stream, _write_stream) = listener_stream.into_split();
+        let (read_stream, write_stream) = listener_stream.into_split();
 
         println!("Incoming connection from {}", socket_address);
 
-        tokio::spawn(peer_init_message_receiver(read_stream, Arc::clone(&searches), Arc::clone(&peers)));
+        tokio::spawn(peer_init_message_receiver(read_stream, write_stream, Arc::clone(&searches), Arc::clone(&peers)));
     }
 }
 
-async fn peer_init_message_receiver(mut read_stream: OwnedReadHalf, searches: Searches, peers: Peers) {
+async fn peer_init_message_receiver(mut read_stream: OwnedReadHalf, write_stream: OwnedWriteHalf, searches: Searches, peers: Peers) {
     let mut packet = read_stream.next_packet().await.expect("cannot read peer packet");
 
     match <u8>::unpack(&mut packet) {
@@ -156,7 +157,7 @@ async fn peer_init_message_receiver(mut read_stream: OwnedReadHalf, searches: Se
             let message = <PeerInit>::unpack(&mut packet);
             println!("Received from peer: PeerInit: username: {}. type: {}. token: {}", message.username, message.connection_type, message.token);
             let username = message.username.clone();
-            peers.lock().await.insert(message.username, Peer::new(username, read_stream, Arc::clone(&searches)));
+            peers.lock().await.insert(message.username, Peer::new(username, read_stream, write_stream, Arc::clone(&searches)));
         }
         code => println!("Received from peer: Unknown message code: {}, length: {}", code, packet.len())
     }
