@@ -5,7 +5,7 @@ pub enum Event {
     LoginSucceeded { message: String },
     LoginFailed { message: String },
     SearchResultReceived { recv: mpsc::Receiver<SearchResultItem> },
-    DownloadStarted { message: String },
+    DownloadQueued { message: String },
     DownloadFailed { message: String }
 }
 

@@ -1,6 +1,10 @@
+use std::fmt::Debug;
+use std::fs::Metadata;
+use std::path::Path;
 use std::time::Duration;
 use tokio::fs;
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
+use rslsk::events::SearchResultItem;
 
 use rslsk::Slsk;
 
@@ -33,24 +37,43 @@ async fn search() {
     assert!(item.filename.to_lowercase().contains("leatherface"));
 }
 
-// #[tokio::test]
-// async fn download() {
-//     let slsk = Slsk::connect("server.slsknet.org", 2242, String::from(USERNAME), String::from(PASSWORD))
-//         .await.unwrap();
-//
-//     slsk.login().await.unwrap();
-//
-//     let result = slsk.search(String::from("leatherface")).await;
-//
-//     assert!(result.is_ok());
-//
-//     let mut receiver = result.unwrap();
-//     let item = timeout(Duration::from_secs(10), receiver.recv()).await.unwrap().unwrap();
-//
-//     let filename = item.clone().filename;
-//     let downloaded_file = format!("/tmp/{}", filename);
-//     slsk.download(item, downloaded_file.clone()).await.unwrap();
-//
-//     let file_metadata = fs::metadata(downloaded_file).await.unwrap();
-//     assert!(file_metadata.is_file());
-// }
+#[tokio::test]
+async fn download() {
+    let slsk = Slsk::connect("server.slsknet.org", 2242, String::from(USERNAME), String::from(PASSWORD))
+        .await.unwrap();
+
+    slsk.login().await.unwrap();
+
+    let result = slsk.search(String::from("leatherface")).await;
+
+    assert!(result.is_ok());
+
+    let mut receiver = result.unwrap();
+    let item = timeout(Duration::from_secs(10), receiver.recv()).await.unwrap().unwrap();
+
+    let filename = item.clone().filename;
+    let downloaded_file = format!("/tmp/{}", filename);
+    slsk.download(item, downloaded_file.clone()).await.unwrap();
+
+    match wait_for_file_creation(downloaded_file, Duration::from_secs(10)).await {
+        Ok(metadata) => {
+            assert!(metadata.is_file())
+        }
+        Err(err) => panic!("Failed to detect file creation: {}", err),
+    }
+
+
+}
+
+
+async fn wait_for_file_creation<P: AsRef<Path>>(path: P, timeout: Duration) -> Result<Metadata, &'static str> {
+    let start = tokio::time::Instant::now();
+    while start.elapsed() < timeout {
+        let result = fs::metadata(&path).await;
+        if result.is_ok() {
+            return Ok(result.unwrap());
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
+    Err("File creation timed out")
+}

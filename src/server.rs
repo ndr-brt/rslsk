@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::format;
 use std::sync::Arc;
 
 use tokio::io::AsyncWriteExt;
@@ -11,11 +10,11 @@ use tokio::sync::Mutex;
 use crate::command_handlers::login_command_handler::LoginHandler;
 use crate::command_handlers::search_command_handler::SearchHandler;
 use crate::commands::Command;
-use crate::events::Event::{DownloadFailed, DownloadStarted};
+use crate::events::Event::{DownloadFailed, DownloadQueued};
 use crate::events::SearchResultItem;
 use crate::message::next_packet::NextPacket;
 use crate::message::pack::Pack;
-use crate::message::peer_responses::{FileSearchResponse, PeerInit};
+use crate::message::peer_responses::PeerInit;
 use crate::message::server_requests::ServerRequests;
 use crate::message::server_responses::{ConnectToPeer, ExcludedSearchPhrases, LoginResponse, ParentMinSpeed, ParentSpeedRatio, PrivilegedUsers, RoomList, ServerResponses, WishlistInterval};
 use crate::message::unpack::Unpack;
@@ -25,6 +24,7 @@ pub(crate) struct Server {
     pub(crate) command_sender: mpsc::Sender<Command>
 }
 
+// TODO: put into a state
 pub type Searches = Arc<Mutex<HashMap<u32, mpsc::Sender<SearchResultItem>>>>;
 pub type Peers = Arc<Mutex<HashMap<String, Peer>>>;
 
@@ -69,10 +69,13 @@ async fn command_handler(
                     .await;
             },
             Command::Download { item, destination, tx } => {
+
                 // start download, save to file, return good!
-                match peers.lock().await.get(&item.username) {
+                match peers.lock().await.get_mut(&item.username) {
                     Some(peer) => {
-                        tx.send(DownloadStarted { message: format!("Download from {} started", peer.username)  }).unwrap()
+                        peer.queue_upload(item.filename).await;
+                        // peer.queue_upload(item.filename).await;
+                        tx.send(DownloadQueued { message: format!("Download from {} queued", peer.username)  }).unwrap()
                     }
                     None => {
                         tx.send(DownloadFailed { message: format!("Cannot find peer {}", item.username) }).unwrap()

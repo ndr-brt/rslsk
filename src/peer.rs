@@ -1,9 +1,13 @@
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use message::peer_requests::QueueUpload;
 
 use crate::events::SearchResultItem;
+use crate::message;
 use crate::message::next_packet::NextPacket;
+use crate::message::pack::Pack;
 use crate::message::peer_responses::FileSearchResponse;
 use crate::message::unpack::Unpack;
 use crate::server::Searches;
@@ -37,7 +41,7 @@ impl Peer {
                             sender.send(search_item).await.unwrap()
                         },
                         None => {
-                            println!("no search result sender available. what do?")
+                            println!("no search result sender available. ignore message.")
                         }
                     }
                 }
@@ -46,8 +50,12 @@ impl Peer {
         }
     }
 
-    pub fn transfer_request(&self) {
-
+    pub async fn queue_upload(&mut self, filename: String) {
+        let queue_upload = QueueUpload { filename };
+        match self.write_stream.write(queue_upload.pack().as_slice()).await {
+            Ok(count) => println!("Message sent: Wrote {} bytes to peer {}", count, self.username),
+            Err(e) => std::panic::panic_any(e)
+        }
     }
 
 }

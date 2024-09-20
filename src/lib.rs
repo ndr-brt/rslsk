@@ -1,5 +1,4 @@
 use std::io::{Error, ErrorKind};
-use std::path::Path;
 
 use tokio::io::Result;
 use tokio::net::TcpStream;
@@ -101,7 +100,11 @@ impl Slsk {
 
         match response {
             Ok(event) => {
-                Ok(true) // TODO: mmmmhhh
+                match event {
+                    Event::DownloadQueued { message } => Ok(true),
+                    Event::DownloadFailed { message } => Ok(false),
+                    _ => Err(Error::new(ErrorKind::Other, "event not expected"))
+                }
             },
             Err(_err) => Err(Error::new(ErrorKind::Other, format!("cannot download: {}", _err)))
         }
