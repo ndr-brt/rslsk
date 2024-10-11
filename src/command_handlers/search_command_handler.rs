@@ -18,12 +18,12 @@ impl SearchHandler {
 
     pub async fn handle(&self, query: String, tx: Sender<Event>) {
         let token = random::<u32>();
-        self.server_requests.clone().send(ServerRequests::FileSearch(FileSearch { token, query })).await.unwrap();
 
         let (search_results_sender, search_results_receiver) = mpsc::channel::<SearchResultItem>(1024);
         self.searches.lock().await.insert(token, search_results_sender);
 
-        let event = Event::SearchResultReceived { recv: search_results_receiver };
+        self.server_requests.clone().send(ServerRequests::FileSearch(FileSearch { token, query })).await.unwrap();
+        let event = Event::SearchResultReceived { token, recv: search_results_receiver };
         tx.send(event).unwrap();
     }
 }

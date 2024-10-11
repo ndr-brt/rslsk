@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
+use std::sync::{Arc};
 
 use tokio::io::Result;
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, oneshot};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{mpsc, Mutex, oneshot};
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use server::Server;
 
@@ -18,13 +20,20 @@ mod commands;
 pub mod command_handlers;
 mod peer;
 
+#[derive(Clone)]
 pub struct Slsk {
     username: String,
     password: String,
-    command_bus: Sender<Command>
+    command_bus: Sender<Command>,
+    search_results: Arc<Mutex<HashMap<u32, SearchResults>>>
+}
+
+pub struct SearchResults {
+    pub items: Vec<SearchResultItem>
 }
 
 impl Slsk {
+
     pub async fn connect(server: &'static str, port: u16, username: String, password: String) -> Result<Self> {
         let address = format!("{}:{}", server, port);
 
@@ -39,6 +48,7 @@ impl Slsk {
                         username,
                         password,
                         command_bus: server.command_sender.clone(),
+                        search_results: Arc::new(Mutex::new(HashMap::new()))
                     }
                 )
             }
@@ -71,7 +81,7 @@ impl Slsk {
         }
     }
 
-    pub async fn search(&self, query: String) -> Result<mpsc::Receiver<SearchResultItem>> {
+    pub async fn search(&self, query: String) -> Result<u32> {
         let (tx, rx) = oneshot::channel::<Event>();
 
         let command = Command::Search { query, tx };
@@ -82,11 +92,24 @@ impl Slsk {
         match response {
             Ok(event) => {
                 match event {
-                    Event::SearchResultReceived { recv } => Ok(recv),
+                    Event::SearchResultReceived { token, mut recv } => {
+                        self.search_results.lock().await.insert(token, SearchResults { items: vec![] });
+                        let results = Arc::clone(&self.search_results);
+                        let other_token = token.clone();
+                        tokio::spawn(save_search_result(other_token, results, recv));
+                        Ok(token)
+                    },
                     _ => Err(Error::new(ErrorKind::Other, "event not expected"))
                 }
             },
             Err(_err) => Err(Error::new(ErrorKind::Other, "cannot search"))
+        }
+    }
+
+    pub async fn get_search_results(self, token: u32) -> Vec<SearchResultItem> {
+        match &self.search_results.lock().await.get(&token) {
+            None => vec![],
+            Some(results) => results.items.clone()
         }
     }
 
@@ -110,6 +133,16 @@ impl Slsk {
         }
     }
 
+
+}
+
+
+async fn save_search_result(token: u32, search_results: Arc<Mutex<HashMap<u32, SearchResults>>>, mut recv: Receiver<SearchResultItem>) {
+    // TODO: drop the thread after some time!
+    while let Some(item) = recv.recv().await {
+        search_results.lock().await.get_mut(&token).expect("cannot find results")
+            .items.push(item);
+    }
 }
 
 #[cfg(test)]
