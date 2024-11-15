@@ -70,7 +70,6 @@ async fn command_handler(
             },
             Command::Download { item, destination, tx } => {
 
-                // start download, save to file, return good!
                 match peers.lock().await.get_mut(&item.username) {
                     Some(peer) => {
                         peer.queue_upload(item.filename).await;

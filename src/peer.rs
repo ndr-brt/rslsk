@@ -1,7 +1,8 @@
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 
+use tokio::io::AsyncWriteExt;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+
 use message::peer_requests::QueueUpload;
 
 use crate::events::SearchResultItem;
@@ -51,9 +52,10 @@ impl Peer {
     }
 
     pub async fn queue_upload(&mut self, filename: String) {
+        let filename_clone = filename.clone();
         let queue_upload = QueueUpload { filename };
         match self.write_stream.write(queue_upload.pack().as_slice()).await {
-            Ok(count) => println!("Message sent: Wrote {} bytes to peer {}", count, self.username),
+            Ok(count) => println!("Sent to peer {}: QueueUpload({}). Bytes: {}", self.username, filename_clone, count),
             Err(e) => std::panic::panic_any(e)
         }
     }

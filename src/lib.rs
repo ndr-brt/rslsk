@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
-use std::sync::{Arc};
+use std::sync::Arc;
 
 use tokio::io::Result;
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, Mutex, oneshot};
+use tokio::sync::{Mutex, oneshot};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use server::Server;
@@ -113,7 +113,7 @@ impl Slsk {
         }
     }
 
-    pub async fn download(&self, item: SearchResultItem, destination: String) -> Result<bool> {
+    pub async fn download(&self, item: SearchResultItem, destination: String) -> Result<String> {
         let (tx, rx) = oneshot::channel::<Event>();
 
         let command = Command::Download { item, destination, tx };
@@ -124,8 +124,8 @@ impl Slsk {
         match response {
             Ok(event) => {
                 match event {
-                    Event::DownloadQueued { message } => Ok(true),
-                    Event::DownloadFailed { message } => Ok(false),
+                    Event::DownloadQueued { message } => Ok(message),
+                    Event::DownloadFailed { message } => Err(Error::new(ErrorKind::Other, message)),
                     _ => Err(Error::new(ErrorKind::Other, "event not expected"))
                 }
             },
