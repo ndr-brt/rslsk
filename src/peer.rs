@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::sync::Arc;
 
 use tokio::io::AsyncWriteExt;
@@ -13,7 +12,7 @@ use crate::message;
 use crate::message::next_packet::NextPacket;
 use crate::message::pack::Pack;
 use crate::message::peer_requests::{PeerRequests, UserInfoResponse};
-use crate::message::peer_responses::{FileSearchResponse, UploadFailed};
+use crate::message::peer_responses::{FileSearchResponse, PeerResponses, UploadFailed};
 use crate::message::unpack::Unpack;
 use crate::server::Searches;
 
@@ -43,10 +42,17 @@ impl Peer {
 async fn peer_message_receiver(username: String, mut read_stream: OwnedReadHalf, searches: Searches, peer_requests: Sender<PeerRequests>) {
     let mut packet = read_stream.next_packet().await.expect("cannot read peer packet");
 
-    match <u32>::unpack(&mut packet) {
-        9 => {
-            let message = <FileSearchResponse>::unpack(&mut packet);
-            println!("Received from peer {}: FileSearchResponse. username {}, token {}, count {}", username, message.username, message.token, message.results.len());
+    let received = match <u32>::unpack(&mut packet) {
+        9 => PeerResponses::FileSearchResponse(<FileSearchResponse>::unpack(&mut packet)),
+        15 => PeerResponses::UserInfoRequest(),
+        46 => PeerResponses::UploadFailed(<UploadFailed>::unpack(&mut packet)),
+        code => PeerResponses::UnknownMessage(code),
+    };
+
+    println!("Received from peer {}: {:?}", username, received);
+
+    match received {
+        PeerResponses::FileSearchResponse(message) => {
             let mut guard = searches.lock().await;
             for item in message.results {
                 match guard.get_mut(&message.token) {
@@ -56,13 +62,12 @@ async fn peer_message_receiver(username: String, mut read_stream: OwnedReadHalf,
                         sender.send(search_item).await.unwrap()
                     },
                     None => {
-                        println!("no search result sender available. ignore message.")
+                        println!("search result token {} unknown. ignore.", message.token)
                     }
                 }
             }
         }
-        15 => {
-            println!("Received from peer {}: UserInfoRequest.", username);
+        PeerResponses::UserInfoRequest() => {
             let request = PeerRequests::UserInfoResponse(UserInfoResponse {
                 description: String::from("rslsk"),
                 has_picture: false,
@@ -70,15 +75,11 @@ async fn peer_message_receiver(username: String, mut read_stream: OwnedReadHalf,
                 queue_size: 1u32,
                 slots_free: false
             });
-            peer_requests.send(request).await.unwrap()
+            peer_requests.send(request).await.unwrap();
         }
-        46 => {
-            let message = <UploadFailed>::unpack(&mut packet);
-            println!("Received from peer {}: {:?}", username, message)
-        }
-
-        code => println!("Received from peer {}: Unknown message code: {}, length: {}", username, code, packet.len())
+        _ => { }
     }
+
 }
 
 async fn peer_message_sender(username: String, mut message_receiver: mpsc::Receiver<PeerRequests>, mut write_socket: OwnedWriteHalf) {

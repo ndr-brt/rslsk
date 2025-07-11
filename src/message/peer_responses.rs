@@ -1,7 +1,16 @@
+use std::fmt::{Debug, Formatter};
+
 use flate2::{Decompress, FlushDecompress};
 
 use crate::message::unpack::Unpack;
 
+#[derive(Debug)]
+pub enum PeerResponses {
+    FileSearchResponse(FileSearchResponse),
+    UserInfoRequest(),
+    UploadFailed(UploadFailed),
+    UnknownMessage(u32)
+}
 pub struct PeerInit {
     pub username: String,
     pub connection_type: String, // TODO: this could be an enum
@@ -66,6 +75,12 @@ impl Unpack for FileSearchResponse {
     }
 }
 
+impl Debug for FileSearchResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "token: {}, files: {}", self.token, self.results.len())
+    }
+}
+
 pub struct ResultItem {
     pub filename: String,
     pub file_size: u64,
@@ -99,19 +114,6 @@ impl Unpack for FileAttribute {
         let value = <u32>::unpack(bytes);
         FileAttribute { code, value }
     }
-}
-
-pub struct UserInfoRequest {
-
-}
-
-impl Unpack for UserInfoRequest {
-    fn unpack(bytes: &mut Vec<u8>) -> Self {
-        UserInfoRequest {
-
-        }
-    }
-
 }
 
 #[derive(Debug)]
