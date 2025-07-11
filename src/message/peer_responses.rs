@@ -101,3 +101,28 @@ impl Unpack for FileAttribute {
     }
 }
 
+pub struct UserInfoRequest {
+
+}
+
+impl Unpack for UserInfoRequest {
+    fn unpack(bytes: &mut Vec<u8>) -> Self {
+        UserInfoRequest {
+
+        }
+    }
+
+}
+
+#[derive(Debug)]
+pub struct UploadFailed {
+    filename: String
+}
+
+impl Unpack for UploadFailed {
+    fn unpack(bytes: &mut Vec<u8>) -> Self {
+        UploadFailed {
+            filename: <String>::unpack(bytes),
+        }
+    }
+}

@@ -69,11 +69,10 @@ async fn command_handler(
                     .await;
             },
             Command::Download { item, destination, tx } => {
-
+                println!("DOWNLOAD {:?}", destination);
                 match peers.lock().await.get_mut(&item.username) {
                     Some(peer) => {
                         peer.queue_upload(item.filename).await;
-                        // peer.queue_upload(item.filename).await;
                         tx.send(DownloadQueued { message: format!("Download from {} queued", peer.username)  }).unwrap()
                     }
                     None => {

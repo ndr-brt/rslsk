@@ -14,6 +14,16 @@ impl Pack for u8 {
     }
 }
 
+impl Pack for bool {
+    fn pack(&self) -> Vec<u8> {
+        if self.eq(&true) {
+            vec![1]
+        } else {
+            vec![0]
+        }
+    }
+}
+
 impl Pack for String {
     fn pack(&self) -> Vec<u8> {
         let length = self.len() as u32;

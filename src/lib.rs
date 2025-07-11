@@ -92,7 +92,7 @@ impl Slsk {
         match response {
             Ok(event) => {
                 match event {
-                    Event::SearchResultReceived { token, mut recv } => {
+                    Event::SearchResultReceived { token, recv } => {
                         self.search_results.lock().await.insert(token, SearchResults { items: vec![] });
                         let results = Arc::clone(&self.search_results);
                         let other_token = token.clone();
