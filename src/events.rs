@@ -12,5 +12,6 @@ pub enum Event {
 #[derive(Debug, Clone)]
 pub struct SearchResultItem {
     pub username: String,
-    pub filename: String
+    pub filename: String,
+    pub slot_free: bool
 }

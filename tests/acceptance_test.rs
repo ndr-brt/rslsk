@@ -53,11 +53,11 @@ async fn download() {
     let search_token = slsk.search(String::from("leatherface")).await.expect("valid search token");
     let search_results = await_for(
         || slsk.clone().get_search_results(search_token),
-        |r| r.len() > 0,
+        |r| r.iter().any(|i| i.slot_free),
         Duration::from_secs(10)
     ).await.expect("search result items");
 
-    let item = search_results.first().expect("item");
+    let item = search_results.iter().filter(|i| i.slot_free).next().expect("item");
 
     let filename = item.clone().filename;
     let downloaded_file = format!("/tmp/{}", filename.split("\\").last().unwrap());

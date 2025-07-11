@@ -58,7 +58,9 @@ async fn peer_message_receiver(username: String, mut read_stream: OwnedReadHalf,
                 match guard.get_mut(&message.token) {
                     Some(sender) => {
                         let username = message.username.clone();
-                        let search_item = SearchResultItem { username, filename: item.filename };
+                        let search_item = SearchResultItem {
+                            username, filename: item.filename, slot_free: message.slot_free
+                        };
                         sender.send(search_item).await.unwrap()
                     },
                     None => {
