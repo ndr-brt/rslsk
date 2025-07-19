@@ -131,7 +131,7 @@ async fn server_message_sender(mut message_receiver: mpsc::Receiver<ServerReques
     while let Some(message) = message_receiver.recv().await {
         let message_vec = message.pack();
         match write_socket.write(message_vec.pack().as_slice()).await {
-            Ok(count) => println!("Message sent: Wrote {} bytes to server", count),
+            Ok(_) => println!("Sent to server: {:?}", message),
             Err(e) => std::panic::panic_any(e)
         }
     }
