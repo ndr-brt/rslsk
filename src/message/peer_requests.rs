@@ -4,30 +4,29 @@ use crate::message::pack::Pack;
 
 #[derive(Debug)]
 pub enum PeerRequests {
-    TransferRequest(TransferRequest),
+    TransferRequest(TransferRequestSend),
     QueueUpload(QueueUpload),
     UserInfoResponse(UserInfoResponse)
 }
 
 impl Pack for PeerRequests {
     fn pack(&self) -> Vec<u8> {
-        return match self {
+        match self {
             PeerRequests::TransferRequest(message) => message.pack(),
             PeerRequests::QueueUpload(message) => message.pack(),
             PeerRequests::UserInfoResponse(message) => message.pack(),
-        };
-
+        }
     }
 }
 
 #[derive(Debug)]
-pub struct TransferRequest {
+pub struct TransferRequestSend {
     pub(crate) direction: u32,
     pub(crate) token: u32,
     pub(crate) filename: String
 }
 
-impl Pack for TransferRequest {
+impl Pack for TransferRequestSend {
     fn pack(&self) -> Vec<u8> {
         let mut bytes = vec![];
         bytes.extend(40u32.pack());

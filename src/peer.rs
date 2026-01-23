@@ -12,8 +12,8 @@ use crate::events::SearchResultItem;
 use crate::message;
 use crate::message::next_packet::NextPacket;
 use crate::message::pack::Pack;
-use crate::message::peer_requests::{PeerRequests, TransferRequest, UserInfoResponse};
-use crate::message::peer_responses::{FileSearchResponse, PeerResponses, UploadFailed};
+use crate::message::peer_requests::{PeerRequests, TransferRequestSend, UserInfoResponse};
+use crate::message::peer_responses::{FileSearchResponse, PeerResponses, TransferRequestReceive, TransferResponse, UploadFailed};
 use crate::message::unpack::Unpack;
 use crate::server::Searches;
 
@@ -40,7 +40,7 @@ impl Peer {
 
     pub async fn transfer_request(&mut self, filename: String) {
         let token = random::<u32>();
-        let transfer_request = TransferRequest { direction: 0, token, filename };
+        let transfer_request = TransferRequestSend { direction: 0, token, filename };
         self.sender.send(PeerRequests::TransferRequest(transfer_request)).await.unwrap()
     }
 
@@ -59,6 +59,8 @@ async fn peer_message_receiver(username: String, mut read_stream: OwnedReadHalf,
         let received = match <u32>::unpack(&mut packet) {
             9 => PeerResponses::FileSearchResponse(<FileSearchResponse>::unpack(&mut packet)),
             15 => PeerResponses::UserInfoRequest(),
+            40 => PeerResponses::TransferRequest(<TransferRequestReceive>::unpack(&mut packet)),
+            41 => PeerResponses::TransferResponse(<TransferResponse>::unpack(&mut packet)),
             46 => PeerResponses::UploadFailed(<UploadFailed>::unpack(&mut packet)),
             code => PeerResponses::UnknownMessage(code),
         };

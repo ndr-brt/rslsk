@@ -8,6 +8,8 @@ use crate::message::unpack::Unpack;
 pub enum PeerResponses {
     FileSearchResponse(FileSearchResponse),
     UserInfoRequest(),
+    TransferRequest(TransferRequestReceive),
+    TransferResponse(TransferResponse),
     UploadFailed(UploadFailed),
     UnknownMessage(u32)
 }
@@ -113,6 +115,47 @@ impl Unpack for FileAttribute {
         let code = <u32>::unpack(bytes);
         let value = <u32>::unpack(bytes);
         FileAttribute { code, value }
+    }
+}
+
+#[derive(Debug)]
+pub struct TransferRequestReceive {
+    pub direction: u32,
+    pub token: u32,
+    pub filename: String,
+    pub file_size: Option<u64>
+}
+
+impl Unpack for TransferRequestReceive {
+    fn unpack(bytes: &mut Vec<u8>) -> Self {
+        let direction = <u32>::unpack(bytes);
+        let token = <u32>::unpack(bytes);
+        let filename = <String>::unpack(bytes);
+        let file_size = if direction == 1 { Some(<u64>::unpack(bytes)) } else { None };
+        TransferRequestReceive { direction, token, filename, file_size }
+    }
+}
+
+#[derive(Debug)]
+pub struct TransferResponse {
+    pub token: u32,
+    pub allowed: bool,
+    pub file_size: Option<u64>,
+    pub reason: Option<String>
+}
+
+impl Unpack for TransferResponse {
+    fn unpack(bytes: &mut Vec<u8>) -> Self {
+        let token = <u32>::unpack(bytes);
+        let allowed = <bool>::unpack(bytes);
+        let (file_size, reason) = if allowed {
+            let size = if bytes.len() >= 8 { Some(<u64>::unpack(bytes)) } else { None };
+            (size, None)
+        } else {
+            let reason = if bytes.is_empty() { None } else { Some(<String>::unpack(bytes)) };
+            (None, reason)
+        };
+        TransferResponse { token, allowed, file_size, reason }
     }
 }
 
