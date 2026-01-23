@@ -13,5 +13,6 @@ pub enum Event {
 pub struct SearchResultItem {
     pub username: String,
     pub filename: String,
-    pub slot_free: bool
+    pub slot_free: bool,
+    pub queue_length: u32,
 }

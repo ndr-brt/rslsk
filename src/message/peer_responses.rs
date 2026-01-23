@@ -77,7 +77,7 @@ impl Unpack for FileSearchResponse {
 
 impl Debug for FileSearchResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "token: {}, files: {}", self.token, self.results.len())
+        write!(f, "token: {}, files: {}, slot_free: {}, queue_length: {}", self.token, self.results.len(), self.slot_free, self.queue_length)
     }
 }
 

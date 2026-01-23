@@ -72,7 +72,8 @@ async fn command_handler(
                 println!("DOWNLOAD {:?}", destination);
                 match peers.lock().await.get_mut(&item.username) {
                     Some(peer) => {
-                        peer.queue_upload(item.filename).await;
+                        peer.transfer_request(item.filename).await;
+                        // peer.queue_upload(item.filename).await;
                         tx.send(DownloadQueued { message: format!("Download from {} queued", peer.username)  }).unwrap()
                     }
                     None => {

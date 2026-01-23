@@ -4,6 +4,7 @@ use crate::message::pack::Pack;
 
 #[derive(Debug)]
 pub enum PeerRequests {
+    TransferRequest(TransferRequest),
     QueueUpload(QueueUpload),
     UserInfoResponse(UserInfoResponse)
 }
@@ -11,10 +12,29 @@ pub enum PeerRequests {
 impl Pack for PeerRequests {
     fn pack(&self) -> Vec<u8> {
         return match self {
+            PeerRequests::TransferRequest(message) => message.pack(),
             PeerRequests::QueueUpload(message) => message.pack(),
             PeerRequests::UserInfoResponse(message) => message.pack(),
         };
 
+    }
+}
+
+#[derive(Debug)]
+pub struct TransferRequest {
+    pub(crate) direction: u32,
+    pub(crate) token: u32,
+    pub(crate) filename: String
+}
+
+impl Pack for TransferRequest {
+    fn pack(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        bytes.extend(40u32.pack());
+        bytes.extend(self.direction.pack());
+        bytes.extend(self.token.pack());
+        bytes.extend(self.filename.pack());
+        return bytes;
     }
 }
 
