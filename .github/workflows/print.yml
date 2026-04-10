@@ -1,0 +1,16 @@
+name: Print events
+
+on:
+  discussion:
+    types: [created, answered]
+  issues:
+    types: [opened, closed]
+  pull_request:
+    types: [opened, closed]
+
+jobs:
+  log:
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: cat ${GITHUB_EVENT_PATH}
